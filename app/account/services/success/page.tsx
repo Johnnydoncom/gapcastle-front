@@ -33,7 +33,7 @@ export default function PaymentSuccessPage() {
 
           <div className="mt-8 flex gap-3">
             <Button variant="outline" className="flex-1 font-semibold" onClick={() => router.push("/app/transactions")}>
-              View History
+              View Historyy
             </Button>
             <Button className="flex-1 font-semibold" onClick={() => router.push("/app/services")}>
               Done

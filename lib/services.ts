@@ -4,7 +4,7 @@ export const SERVICE_CATEGORIES = [
   { slug: "cable", href: "cable", label: "Cable TV", icon: "Tv", description: "DSTV, GOTV, Startimes", color: "bg-pink-50 text-pink-600" },
   { slug: "electricity", href: "electricity", label: "Electricity", icon: "Zap", description: "Pay power bills", color: "bg-yellow-50 text-yellow-700" },
   { slug: "internet", href: "internet", label: "Internet", icon: "Globe", description: "Spectranet, Smile, Swift", color: "bg-cyan-50 text-cyan-600" },
-  { slug: "recharge_pin", href: "recharge-pin", label: "Recharge PINs", icon: "Ticket", description: "Buy airtime vouchers", color: "bg-orange-50 text-orange-600" },
+  { slug: "pin", href: "recharge-pin", label: "Recharge PINs", icon: "Ticket", description: "Buy airtime vouchers", color: "bg-orange-50 text-orange-600" },
   { slug: "education", href: "education", label: "Education", icon: "GraduationCap", description: "WAEC, JAMB, NECO", color: "bg-emerald-50 text-emerald-600" },
   { slug: "insurance", href: "insurance", label: "Insurance", icon: "Shield", description: "Pay your premiums", color: "bg-indigo-50 text-indigo-600" },
   { slug: "gas", href: "gas", label: "Gas", icon: "Flame", description: "Pay for cooking gas", color: "bg-rose-50 text-rose-600" },

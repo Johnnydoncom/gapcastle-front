@@ -2,15 +2,15 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   const { pathname } = req.nextUrl;
 
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
-  const isProtectedRoute = pathname.startsWith("/app");
+  const isProtectedRoute = pathname.startsWith("/account");
 
   if (isAuthRoute && token) {
-    return NextResponse.redirect(new URL("/app/dashboard", req.url));
+    return NextResponse.redirect(new URL("/account", req.url));
   }
 
   if (isProtectedRoute && !token) {
@@ -21,5 +21,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/login", "/signup"],
+  matcher: ["/account/:path*", "/login", "/signup"],
 };

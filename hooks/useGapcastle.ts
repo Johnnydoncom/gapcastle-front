@@ -88,6 +88,20 @@ export const useTransactions = (limit?: number) => {
   });
 };
 
+export const useTransactionDetail = (transactionId: number | null) => {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+
+  return useQuery({
+    queryKey: ["transactionDetail", transactionId],
+    enabled: !!token && !!transactionId,
+    queryFn: async () => {
+      const data = await fetchApi(`/transactions/${transactionId}`, token as string);
+      return data.data || data;
+    },
+  });
+};
+
 export const useProviders = (serviceSlug?: string, initialData?: any[]) => {
   const { data: session } = useSession();
   const token = session?.accessToken;

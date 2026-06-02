@@ -125,8 +125,8 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       { name: "identifier", label: "Account / Device ID", type: "text", placeholder: "Enter Account ID" },
     ],
   },
-  pins: {
-    slug: "pins", // Wait, front-end uses "recharge_pin" for service slug
+  pin: {
+    slug: "pin",
     title: "PIN Services",
     schema: z.object({
       providerId: z.number({ message: "Please select an Exam Type" }),

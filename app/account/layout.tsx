@@ -16,25 +16,25 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 
 const mainNav = [
-  { to: "/app", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/app/wallet", label: "Wallet", icon: Wallet },
-  { to: "/app/transactions", label: "Transactions", icon: Receipt },
-  { to: "/app/rewards", label: "Rewards", icon: Gift },
+  { to: "/account", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/account/wallet", label: "Wallet", icon: Wallet },
+  { to: "/account/transactions", label: "Transactions", icon: Receipt },
+  { to: "/account/rewards", label: "Rewards", icon: Gift },
 ];
 
 const servicesNav = [
-  { to: "/app/services/airtime", label: "Buy Airtime", icon: Phone, color: "from-blue-400 to-blue-600" },
-  { to: "/app/services/data", label: "Internet Data", icon: Wifi, color: "from-emerald-400 to-emerald-600" },
-  { to: "/app/services/electricity", label: "Electricity", icon: Lightbulb, color: "from-amber-400 to-orange-500" },
-  { to: "/app/services/cable", label: "PayTV", icon: Tv, color: "from-purple-400 to-purple-600" },
-  { to: "/app/services/education", label: "Educational", icon: GraduationCap, color: "from-pink-400 to-rose-500" },
-  { to: "/app/services/insurance", label: "Insurance", icon: ShieldCheck, color: "from-indigo-400 to-indigo-600" },
-  { to: "/app/services", label: "All Services", icon: Grid3x3, color: "from-slate-400 to-slate-600" },
+  { to: "/account/airtime", label: "Buy Airtime", icon: Phone, color: "from-blue-400 to-blue-600" },
+  { to: "/account/data", label: "Internet Data", icon: Wifi, color: "from-emerald-400 to-emerald-600" },
+  { to: "/account/electricity", label: "Electricity", icon: Lightbulb, color: "from-amber-400 to-orange-500" },
+  { to: "/account/cable", label: "PayTV", icon: Tv, color: "from-purple-400 to-purple-600" },
+  { to: "/account/education", label: "Educational", icon: GraduationCap, color: "from-pink-400 to-rose-500" },
+  { to: "/account/insurance", label: "Insurance", icon: ShieldCheck, color: "from-indigo-400 to-indigo-600" },
+  { to: "/account/services", label: "All Services", icon: Grid3x3, color: "from-slate-400 to-slate-600" },
 ];
 
 const generalNav = [
-  { to: "/app/support", label: "Support Tickets", icon: LifeBuoy },
-  { to: "/app/settings", label: "Account Settings", icon: Settings },
+  { to: "/account/support", label: "Support Tickets", icon: LifeBuoy },
+  { to: "/account/settings", label: "Account Settings", icon: Settings },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -63,7 +63,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => { await signOut({ callbackUrl: "/" }); };
 
-  const isPathActive = (to: string) => pathname === to || (to !== "/app" && !!pathname?.startsWith(to));
+  const isPathActive = (to: string) => pathname === to || (to !== "/account" && !!pathname?.startsWith(to));
 
   const userName = session?.user?.name || "User";
   const userEmail = session?.user?.email || "";
@@ -215,7 +215,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 Invite friends and earn a ₦500 bonus for each successful referral.
               </p>
               <Button size="sm" className="w-full text-xs h-9 rounded-xl bg-white text-indigo-950 hover:bg-slate-100 hover:text-indigo-900 font-bold shadow-lg transition-all hover:scale-[1.02]" asChild>
-                <Link href="/app/rewards">Invite Friends</Link>
+                <Link href="/account/rewards">Invite Friends</Link>
               </Button>
             </div>
           </div>
