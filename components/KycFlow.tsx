@@ -305,7 +305,6 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
                         <ComboboxItem
                           key={prod.id}
                           value={prod.name}
-                          textValue={prod.name}
                           className="py-3 px-3 mb-1 cursor-pointer rounded-lg transition-colors data-[highlighted]:bg-muted/60"
                         >
                           <div className="flex flex-1 justify-between items-center w-full pr-4">
