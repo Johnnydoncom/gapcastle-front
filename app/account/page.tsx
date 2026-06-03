@@ -1,17 +1,18 @@
 "use client";
 import Link from "next/link";
-import { useWallet, useProfile, useTransactions } from "@/hooks/useGapcastle";
+import { useWallet, useProfile, useTransactions, useServices } from "@/hooks/useGapcastle";
 import { formatNaira, formatDate } from "@/lib/format";
-import { SERVICE_CATEGORIES } from "@/lib/services";
+import { getServiceUi } from "@/lib/services";
 import { Button } from "@/components/ui/button";
 import * as Icons from "lucide-react";
-import { Plus, Eye, EyeOff, ArrowUpRight } from "lucide-react";
+import { Plus, Eye, EyeOff, ArrowUpRight, CircleDollarSign } from "lucide-react";
 import { useState } from "react";
 
 export default function Dashboard() {
   const { data: wallet } = useWallet();
   const { data: profile } = useProfile();
   const { data: txns } = useTransactions(5);
+  const { data: services, isLoading: servicesLoading } = useServices();
   const [hide, setHide] = useState(false);
 
   return (
@@ -52,15 +53,23 @@ export default function Dashboard() {
           <Link href="/account/services" className="text-sm font-medium text-primary hover:underline">View all</Link>
         </div>
         <div className="grid grid-cols-4 gap-3 sm:grid-cols-8">
-          {SERVICE_CATEGORIES.map((s) => {
-            const Icon = (Icons as any)[s.icon];
-            return (
-              <Link key={s.slug} href={`/account/${s.href}`} className="group flex flex-col items-center gap-2 rounded-xl border p-3 text-center transition hover:border-primary hover:bg-accent">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${s.color}`}><Icon className="h-5 w-5" /></div>
-                <span className="text-[11px] font-medium leading-tight">{s.label}</span>
-              </Link>
-            );
-          })}
+          {servicesLoading
+            ? Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-2 rounded-xl border p-3">
+                  <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
+                  <div className="h-3 w-12 animate-pulse rounded bg-muted" />
+                </div>
+              ))
+            : services?.map((s: { slug: string; name: string }) => {
+                const ui = getServiceUi(s.slug);
+                const Icon = ((Icons as any)[ui.icon] ?? CircleDollarSign) as React.ElementType;
+                return (
+                  <Link key={s.slug} href={`/account/${ui.href}`} className="group flex flex-col items-center gap-2 rounded-xl border p-3 text-center transition hover:border-primary hover:bg-accent">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${ui.color}`}><Icon className="h-5 w-5" /></div>
+                    <span className="text-[11px] font-medium leading-tight">{s.name || ui.label}</span>
+                  </Link>
+                );
+              })}
         </div>
       </div>
 

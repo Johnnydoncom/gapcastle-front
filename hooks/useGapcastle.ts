@@ -102,6 +102,22 @@ export const useTransactionDetail = (transactionId: number | null) => {
   });
 };
 
+export const useServices = () => {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+
+  return useQuery({
+    queryKey: ["services"],
+    enabled: !!token,
+    queryFn: async () => {
+      const data = await fetchApi("/services", token as string);
+      const services = data.data || data;
+      return Array.isArray(services) ? services : [];
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes — backend caches for 24h, refetch on remount at most every 5 min
+  });
+};
+
 export const useProviders = (serviceSlug?: string, initialData?: any[]) => {
   const { data: session } = useSession();
   const token = session?.accessToken;
