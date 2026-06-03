@@ -229,7 +229,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
             )}
 
             <div className="mt-8 flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => router.push("/app/transactions")}>History</Button>
+              <Button variant="outline" className="flex-1" onClick={() => router.push("/account/transactions")}>History</Button>
               <Button className="flex-1" onClick={() => { setStep(1); setFormValues({}); setResultTxn(null); setSelectedProduct(null); }}>Done</Button>
             </div>
           </div>
@@ -249,7 +249,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
-      <button onClick={() => step === 2 ? setStep(1) : router.push("/app/services")} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <button onClick={() => step === 2 ? setStep(1) : router.push("/account/services")} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" />Back
       </button>
 
