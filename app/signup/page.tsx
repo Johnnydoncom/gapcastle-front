@@ -17,27 +17,27 @@ export default function Signup() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
       const res = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ 
-          email: form.email, 
-          password: form.password, 
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
           password_confirmation: form.password,
-          name: form.fullName, 
-          phone: form.phone 
+          name: form.fullName,
+          phone: form.phone
         }),
       });
-      
+
       const data = await res.json();
-      
+
       if (!res.ok) {
         throw new Error(data.message || "Registration failed");
       }
-      
+
       // Auto-login after successful registration
       const signInRes = await signIn("credentials", {
         redirect: false,
@@ -50,7 +50,7 @@ export default function Signup() {
       }
 
       toast.success("Account created! Welcome to GapCastle 🎉");
-      router.push("/app/dashboard");
+      router.push("/account");
     } catch (error: any) {
       toast.error(error.message);
     } finally {
