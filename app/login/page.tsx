@@ -30,7 +30,7 @@ export default function Login() {
       return;
     }
     toast.success("Welcome back!");
-    router.push("/app");
+    router.push("/account");
   };
 
   return (
