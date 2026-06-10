@@ -37,7 +37,8 @@ export default function Dashboard() {
             <Link href="/account/services"><Button variant="outline" className="gap-2 border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white">Pay a bill</Button></Link>
           </div>
         </div>
-        <div className="rounded-2xl border bg-card p-6 shadow-card">
+        {/* display only on desktopo devices and remove on mobile devices */}
+        <div className="rounded-2xl border bg-card p-6 shadow-card hidden md:block">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Cashback earned</p>
           <p className="mt-2 text-3xl font-bold text-success">{formatNaira(wallet?.cashback_balance ?? 0)}</p>
           <Link href="/account/rewards" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
@@ -55,21 +56,21 @@ export default function Dashboard() {
         <div className="grid grid-cols-4 gap-3 sm:grid-cols-8">
           {servicesLoading
             ? Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="flex flex-col items-center gap-2 rounded-xl border p-3">
-                  <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
-                  <div className="h-3 w-12 animate-pulse rounded bg-muted" />
-                </div>
-              ))
+              <div key={i} className="flex flex-col items-center gap-2 rounded-xl border p-3">
+                <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
+                <div className="h-3 w-12 animate-pulse rounded bg-muted" />
+              </div>
+            ))
             : services?.map((s: { slug: string; name: string }) => {
-                const ui = getServiceUi(s.slug);
-                const Icon = ((Icons as any)[ui.icon] ?? CircleDollarSign) as React.ElementType;
-                return (
-                  <Link key={s.slug} href={`/account/${ui.href}`} className="group flex flex-col items-center gap-2 rounded-xl border p-3 text-center transition hover:border-primary hover:bg-accent">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${ui.color}`}><Icon className="h-5 w-5" /></div>
-                    <span className="text-[11px] font-medium leading-tight">{s.name || ui.label}</span>
-                  </Link>
-                );
-              })}
+              const ui = getServiceUi(s.slug);
+              const Icon = ((Icons as any)[ui.icon] ?? CircleDollarSign) as React.ElementType;
+              return (
+                <Link key={s.slug} href={`/account/${ui.href}`} className="group flex flex-col items-center gap-2 rounded-xl border p-3 text-center transition hover:border-primary hover:bg-accent">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${ui.color}`}><Icon className="h-5 w-5" /></div>
+                  <span className="text-[11px] font-medium leading-tight">{s.name || ui.label}</span>
+                </Link>
+              );
+            })}
         </div>
       </div>
 
