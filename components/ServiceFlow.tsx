@@ -101,7 +101,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
     let attempts = 0;
     let consecutiveErrors = 0;
     const MAX_ATTEMPTS = 36; // 3 minutes at 5-second intervals
-    const MAX_ERRORS   = 3;
+    const MAX_ERRORS = 3;
 
     pollRef.current = setInterval(async () => {
       attempts++;
@@ -121,10 +121,10 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         }
 
         consecutiveErrors = 0;
-        const data          = await res.json();
-        const status        = (data?.data?.status ?? "") as string;
-        const errorMessage  = (data?.data?.error_message ?? "") as string;
-        const latestData    = data?.data ?? {};
+        const data = await res.json();
+        const status = (data?.data?.status ?? "") as string;
+        const errorMessage = (data?.data?.error_message ?? "") as string;
+        const latestData = data?.data ?? {};
 
         if (status === "successful") {
           clearInterval(pollRef.current!);
@@ -280,12 +280,12 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
 
   if (step === 3 && resultTxn) {
     const isProcessing = txnStatus === "processing";
-    const isFailed     = txnStatus === "failed";
-    const isSuccess    = txnStatus === "successful";
-    const provider     = providers.find((p: any) => p.id === (resultTxn.bill_provider_id ?? formValues?.providerId));
+    const isFailed = txnStatus === "failed";
+    const isSuccess = txnStatus === "successful";
+    const provider = providers.find((p: any) => p.id === (resultTxn.bill_provider_id ?? formValues?.providerId));
     const providerName = provider?.name ?? resultTxn.provider_name ?? formValues?.providerId;
-    const customerId   = resultTxn.customer ?? formValues?.identifier;
-    const tokenValue   = resultTxn.token ?? resultTxn.metadata?.token ?? null;
+    const customerId = resultTxn.customer ?? formValues?.identifier;
+    const tokenValue = resultTxn.token ?? resultTxn.metadata?.token ?? null;
 
     return (
       <div className="mx-auto max-w-md py-8 animate-in fade-in zoom-in duration-300">
@@ -295,8 +295,8 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
           <div className={[
             "h-2 w-full",
             isProcessing ? "bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400 animate-pulse" : "",
-            isSuccess    ? "bg-gradient-to-r from-emerald-400 to-teal-500" : "",
-            isFailed     ? "bg-destructive" : "",
+            isSuccess ? "bg-gradient-to-r from-emerald-400 to-teal-500" : "",
+            isFailed ? "bg-destructive" : "",
           ].join(" ")} />
 
           <div className="p-6 sm:p-8 text-center">
@@ -315,8 +315,8 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
             {isFailed && (
               <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10 text-destructive ring-8 ring-destructive/5">
                 <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                  <path strokeLinecap="round" d="M12 8v4m0 4h.01" strokeWidth="2"/>
+                  <circle cx="12" cy="12" r="10" strokeWidth="2" />
+                  <path strokeLinecap="round" d="M12 8v4m0 4h.01" strokeWidth="2" />
                 </svg>
               </div>
             )}
@@ -360,7 +360,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                 </div>
 
                 {providerName && <Row label="Provider" value={<span className="font-semibold">{providerName}</span>} />}
-                {customerId   && <Row label="Customer" value={<span className="font-medium">{customerId}</span>} />}
+                {customerId && <Row label="Customer" value={<span className="font-medium">{customerId}</span>} />}
                 {(formValues?.planName || resultTxn.product_name) && (
                   <Row label="Plan" value={formValues?.planName || resultTxn.product_name} />
                 )}
@@ -390,8 +390,8 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                 <div className="flex justify-between items-center pt-1">
                   <span className="text-muted-foreground font-medium">Status</span>
                   {isProcessing && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400"><span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />Processing</span>}
-                  {isSuccess    && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" />Delivered</span>}
-                  {isFailed     && <span className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/30 px-2.5 py-0.5 text-xs font-semibold text-destructive">Failed</span>}
+                  {isSuccess && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" />Delivered</span>}
+                  {isFailed && <span className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/30 px-2.5 py-0.5 text-xs font-semibold text-destructive">Failed</span>}
                 </div>
               </div>
             </div>
@@ -443,7 +443,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
 
   return (
     <div className="mx-auto w-full max-w-2xl sm:space-y-4">
-      <div className="overflow-hidden rounded-none border-x-0 border-t-0 border-b bg-card pb-6 sm:rounded-3xl sm:border sm:shadow-card sm:pb-8">
+      <div className="rounded-none border-x-0 border-t-0 border-b bg-card pb-6 sm:rounded-3xl sm:border sm:shadow-card sm:pb-8">
         {/* App-like Header */}
         <div className="mb-6 flex items-center justify-between border-b bg-muted/20 p-4 sm:px-8 sm:py-5">
           <div className="flex items-center gap-4">

@@ -88,15 +88,15 @@ export const useTransactions = (limit?: number) => {
   });
 };
 
-export const useTransactionDetail = (transactionId: number | null) => {
+export const useTransactionDetail = (reference: string | null) => {
   const { data: session } = useSession();
   const token = session?.accessToken;
 
   return useQuery({
-    queryKey: ["transactionDetail", transactionId],
-    enabled: !!token && !!transactionId,
+    queryKey: ["transactionDetail", reference],
+    enabled: !!token && !!reference,
     queryFn: async () => {
-      const data = await fetchApi(`/transactions/${transactionId}`, token as string);
+      const data = await fetchApi(`/transactions/${reference}`, token as string);
       return data.data || data;
     },
   });

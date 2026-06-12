@@ -75,9 +75,25 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       identifier: smartcardNumberSchema,
       transactionType: z.enum(["renew", "change"], { message: "Select transaction type" }),
       planId: z.number().optional(),
-      amount: amountSchema,
+      amount: z.union([z.number(), z.string()]).optional(),
       planName: z.string().optional(),
       variationCode: z.string().optional(),
+    }).superRefine((data, ctx) => {
+      const amt = Number(data.amount);
+      if (data.transactionType === "renew" && (!amt || amt < 50)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please click 'Verify' to fetch your renewal amount.",
+          path: ["identifier"],
+        });
+      }
+      if (data.transactionType === "change" && (!amt || amt < 50)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please select a valid bouquet plan.",
+          path: ["planId"],
+        });
+      }
     }),
     defaultValues: { providerId: undefined, identifier: "", transactionType: "change", amount: "" },
     fields: [
@@ -85,7 +101,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       { name: "identifier", label: "Smartcard Number", type: "verify_input", placeholder: "Enter smartcard number" },
       { name: "transactionType", label: "Transaction Type", type: "radio", options: [{ label: "Change Bouquet", value: "change" }, { label: "Renew Current Bouquet", value: "renew" }] },
       { name: "planId", label: "Bouquet / Plan", type: "plan_grid", isHidden: (vals) => vals.transactionType === "renew" },
-      { name: "amount", label: "Amount (₦)", type: "number", readonly: true, isHidden: (vals) => vals.transactionType === "change" },
+      { name: "amount", label: "Amount (₦)", type: "number", readonly: true, isHidden: (vals) => vals.transactionType === "renew" },
     ],
   },
   electricity: {

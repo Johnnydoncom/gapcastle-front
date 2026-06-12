@@ -86,7 +86,7 @@ export default function Transactions() {
   const receiptRef = useRef<HTMLDivElement>(null);
 
   // Fetch detailed transaction when a transaction is selected
-  const { data: txnDetail, isLoading: isLoadingDetail } = useTransactionDetail(selectedTxn?.id || null);
+  const { data: txnDetail, isLoading: isLoadingDetail } = useTransactionDetail(selectedTxn?.reference || null);
 
   const activeTxn = txnDetail || selectedTxn;
 
@@ -379,6 +379,21 @@ export default function Transactions() {
                       </button>
                     } />
                     <ReceiptRow label="Date" value={formatDate(activeTxn.created_at)} />
+
+                    {/* ── Token / PIN (Electricity prepaid, etc.) ── */}
+                    {activeTxn.token && (
+                      <div className="mt-3 mb-1 rounded-xl border-2 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-700 p-4 text-center">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-2">Your Token / PIN</p>
+                        <p className="text-lg font-mono font-black tracking-[0.2em] text-emerald-700 dark:text-emerald-300 select-all break-all">{activeTxn.token}</p>
+                        <button
+                          onClick={() => copyRef(activeTxn.token)}
+                          className="mt-2 inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:text-emerald-800 transition-colors"
+                        >
+                          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                          {copied ? "Copied!" : "Tap to copy"}
+                        </button>
+                      </div>
+                    )}
                     <div className={`status ${activeTxn.status?.toLowerCase()}`} style={{ display: "none" }}>
                       {cfg.label}
                     </div>

@@ -67,7 +67,8 @@ export function DynamicFormFields({
         toast.success("Verified successfully!");
         // Auto-fill amount if verification returns minimum amount or exact amount
         if (res.minimum_amount) setValue("amount", Number(res.minimum_amount));
-        if (res.amount) setValue("amount", Number(res.amount));
+        else if (res.amount) setValue("amount", Number(res.amount));
+        else if (res.metadata?.Renewal_Amount) setValue("amount", Number(res.metadata.Renewal_Amount));
       }
     } catch (err: any) {
       setVerifiedData({ is_valid: false, message: err.message || "Verification failed" });
