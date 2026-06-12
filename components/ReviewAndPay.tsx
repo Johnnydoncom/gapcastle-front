@@ -30,6 +30,8 @@ export interface ReviewAndPayProps {
   onPay: () => void;
   /** Whether the payment is currently being processed */
   submitting: boolean;
+  /** Optional live status message (modal opening, verifying, polling) */
+  paymentStatusLabel?: string | null;
 }
 
 export function ReviewAndPay({
@@ -43,6 +45,7 @@ export function ReviewAndPay({
   onEdit,
   onPay,
   submitting,
+  paymentStatusLabel,
 }: ReviewAndPayProps) {
   const selectedGateway = gateways.find((g: any) => g.id === selectedGatewayId);
   const isWallet = selectedGateway?.slug === "wallet";
@@ -155,6 +158,11 @@ export function ReviewAndPay({
         {insufficientBalance && (
           <p className="mt-2 text-center text-xs text-destructive font-medium">
             Insufficient wallet balance. Fund your wallet or select another method.
+          </p>
+        )}
+        {paymentStatusLabel && (
+          <p className="mt-2 text-center text-xs text-muted-foreground animate-pulse font-medium">
+            {paymentStatusLabel}
           </p>
         )}
         <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">

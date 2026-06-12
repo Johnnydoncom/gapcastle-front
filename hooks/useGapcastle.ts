@@ -182,5 +182,9 @@ export const usePaymentGateways = () => {
       const gateways = data.data || data;
       return Array.isArray(gateways) ? gateways : [];
     },
+    // Gateway config (public keys, contract codes) changes very rarely.
+    // Cache for 30 minutes to avoid re-fetching on every component mount.
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 };

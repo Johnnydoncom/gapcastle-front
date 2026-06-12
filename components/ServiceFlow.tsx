@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { serviceRegistry } from "@/lib/services/registry";
 import { DynamicFormFields } from "@/components/DynamicFormFields";
 import { ReviewAndPay, type OrderSummaryItem } from "@/components/ReviewAndPay";
+import { openGatewayModal } from "@/lib/gateway-sdk";
 
 export interface ServiceFlowProps {
   category: string;
@@ -50,6 +51,12 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const [resultTxn, setResultTxn] = useState<any>(null);
   const [verifiedData, setVerifiedData] = useState<any>(null);
   const [formValues, setFormValues] = useState<any>(null);
+  /** Human-readable status shown below the Pay button while the modal / poll is active */
+  const [paymentStatusLabel, setPaymentStatusLabel] = useState<string | null>(null);
+  /** Live status of the transaction on the receipt screen: processing | successful | failed */
+  const [txnStatus, setTxnStatus] = useState<"processing" | "successful" | "failed">("processing");
+  const [txnErrorMessage, setTxnErrorMessage] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Auto-select first provider by default
   useEffect(() => {
@@ -70,16 +77,77 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
     }
   }, [gateways, selectedGatewayId]);
 
+  // Clean up polling on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
   if (!config) {
     return <div className="p-8 text-center text-destructive font-semibold">Service configuration not found for: {category}</div>;
   }
 
   const balance = Number(wallet?.balance ?? 0);
   const title = overrideTitle || config.title;
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
 
   const onReview = (data: any) => {
     setFormValues(data);
     setStep(2);
+  };
+
+  /**
+   * Poll GET /transactions/{reference}/status until the transaction leaves the
+   * processing state, then update UI accordingly.
+   */
+  const pollTransactionStatus = (reference: string, token: string, txnSnapshot: any) => {
+    let attempts = 0;
+    let consecutiveErrors = 0;
+    const MAX_ATTEMPTS = 36; // 3 minutes at 5-second intervals
+    const MAX_ERRORS   = 3;
+
+    pollRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(`${API_URL}/transactions/${reference}/status`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        });
+
+        if (!res.ok) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_ERRORS) {
+            clearInterval(pollRef.current!);
+            // Don't mark failed — we simply stop polling. Receipt stays in processing state
+            // with a note that the user should check history.
+          }
+          return;
+        }
+
+        consecutiveErrors = 0;
+        const data          = await res.json();
+        const status        = (data?.data?.status ?? "") as string;
+        const errorMessage  = (data?.data?.error_message ?? "") as string;
+        const latestData    = data?.data ?? {};
+
+        if (status === "successful") {
+          clearInterval(pollRef.current!);
+          // Merge the fresh server data into resultTxn so the receipt shows token/details
+          setResultTxn((prev: any) => ({ ...prev, ...txnSnapshot, ...latestData, status }));
+          setTxnStatus("successful");
+          qc.invalidateQueries({ queryKey: ["wallet"] });
+          qc.invalidateQueries({ queryKey: ["transactions"] });
+        } else if (status === "failed") {
+          clearInterval(pollRef.current!);
+          setTxnStatus("failed");
+          setTxnErrorMessage(errorMessage || "Your payment could not be processed.");
+          qc.invalidateQueries({ queryKey: ["wallet"] });
+          qc.invalidateQueries({ queryKey: ["transactions"] });
+        }
+        // pending_payment / processing → keep polling silently
+      } catch {
+        consecutiveErrors++;
+        if (consecutiveErrors >= MAX_ERRORS) {
+          clearInterval(pollRef.current!);
+        }
+      }
+    }, 5000);
   };
 
   const handlePay = async () => {
@@ -89,12 +157,12 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
     }
 
     setSubmitting(true);
+    setPaymentStatusLabel(null);
     try {
       const token = session?.accessToken;
       if (!token) throw new Error("Session expired. Please log in again.");
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
-
+      // ── Step 1: create the transaction on the backend ──────────────────────
       const payload: any = {
         bill_service_slug: groupSlug,
         bill_provider_id: formValues.providerId,
@@ -122,62 +190,251 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
       }
       if (!res.ok) throw new Error(result.message || "Payment failed");
 
-      if (result.data?.payment_url) {
-        window.location.href = result.data.payment_url;
+      // ── Step 2a: wallet pay — done immediately ─────────────────────────────
+      if (!result.data?.payment_url && !result.data?.access_code) {
+        setResultTxn(result.data || result);
+        qc.invalidateQueries({ queryKey: ["wallet"] });
+        qc.invalidateQueries({ queryKey: ["transactions"] });
+        setStep(3);
         return;
       }
 
-      setResultTxn(result.data || result);
-      qc.invalidateQueries({ queryKey: ["wallet"] });
-      qc.invalidateQueries({ queryKey: ["transactions"] });
+      // ── Step 2b: gateway pay — open inline modal ───────────────────────────
+      const txnData = result.data;
+      const { payment_url, access_code, reference } = txnData;
+
+      setPaymentStatusLabel("Opening payment modal…");
+
+      // Use the user profile email from session; fall back to identifier if it looks like an email
+      const userEmail =
+        (session?.user as any)?.email ??
+        (formValues.identifier?.includes("@") ? formValues.identifier : `user-${reference}@gapcastle.ng`);
+
+      const gatewayResult = await openGatewayModal({
+        gatewaySlug: selectedGateway!.slug,
+        reference,
+        accessCode: access_code ?? "",
+        paymentUrl: payment_url ?? null,
+        amount: Number(formValues.amount),
+        email: userEmail,
+        name: (session?.user as any)?.name ?? undefined,
+        publicKey: selectedGateway!.public_key ?? "",
+        sdkConfig: selectedGateway!.sdk_config ?? {},
+        currency: "NGN",
+      });
+
+      // ── Step 3: handle modal result ────────────────────────────────────────
+      if (gatewayResult.status === "cancelled") {
+        // The user dismissed the modal; the backend transaction stays as pending_payment.
+        // Webhook will eventually process it if the gateway actually captured the payment.
+        setSubmitting(false);
+        setPaymentStatusLabel(null);
+        toast.info("Payment cancelled. Your order has not been processed.");
+        return;
+      }
+
+      if (gatewayResult.status === "error") {
+        throw new Error(gatewayResult.message);
+      }
+
+      // ── Step 4: verify payment with backend ───────────────────────────────
+      setPaymentStatusLabel("Verifying payment…");
+      const verifyRes = await fetch(`${API_URL}/transactions/verify`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({ reference }),
+      });
+      const verifyData = await verifyRes.json();
+      const verifiedStatus = verifyData?.data?.status ?? "";
+
+      // ── Step 5: show receipt immediately, poll in background ─────────────
+      // Whether the bill is already delivered or still queuing, we show the
+      // receipt screen right away so the user is never blocked.
+      setResultTxn({ ...txnData, ...verifyData?.data });
+      setTxnStatus(verifiedStatus === "successful" ? "successful" : "processing");
+      setSubmitting(false);
+      setPaymentStatusLabel(null);
       setStep(3);
+
+      if (verifiedStatus !== "successful") {
+        // Start silent background polling — the receipt screen will update live.
+        qc.invalidateQueries({ queryKey: ["wallet"] });
+        qc.invalidateQueries({ queryKey: ["transactions"] });
+        pollTransactionStatus(reference, token as string, txnData);
+      } else {
+        qc.invalidateQueries({ queryKey: ["wallet"] });
+        qc.invalidateQueries({ queryKey: ["transactions"] });
+      }
+
     } catch (error: any) {
       toast.error(error.message);
       setSubmitting(false);
+      setPaymentStatusLabel(null);
     }
   };
 
+
   if (step === 3 && resultTxn) {
+    const isProcessing = txnStatus === "processing";
+    const isFailed     = txnStatus === "failed";
+    const isSuccess    = txnStatus === "successful";
+    const provider     = providers.find((p: any) => p.id === (resultTxn.bill_provider_id ?? formValues?.providerId));
+    const providerName = provider?.name ?? resultTxn.provider_name ?? formValues?.providerId;
+    const customerId   = resultTxn.customer ?? formValues?.identifier;
+    const tokenValue   = resultTxn.token ?? resultTxn.metadata?.token ?? null;
+
     return (
       <div className="mx-auto max-w-md py-8 animate-in fade-in zoom-in duration-300">
-        <div className="rounded-2xl border bg-card p-6 sm:p-8 text-center shadow-card relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-success/10 to-transparent" />
-          <div className="relative">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-success/20 text-success ring-8 ring-success/5 mb-6">
-              <CheckCircle2 className="h-10 w-10" />
-            </div>
-            <h2 className="text-2xl font-extrabold tracking-tight">Payment Successful</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Your {title.toLowerCase()} was processed successfully.</p>
+        <div className="rounded-2xl border bg-card shadow-card relative overflow-hidden">
 
-            <div className="mt-8 relative">
-              <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                <div className="w-full border-t-2 border-dashed border-border"></div>
+          {/* ── Colour band at top changes with status ── */}
+          <div className={[
+            "h-2 w-full",
+            isProcessing ? "bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400 animate-pulse" : "",
+            isSuccess    ? "bg-gradient-to-r from-emerald-400 to-teal-500" : "",
+            isFailed     ? "bg-destructive" : "",
+          ].join(" ")} />
+
+          <div className="p-6 sm:p-8 text-center">
+
+            {/* ── Status icon ── */}
+            {isProcessing && (
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10 ring-8 ring-amber-500/5">
+                <div className="h-10 w-10 rounded-full border-4 border-amber-500 border-t-transparent animate-spin" />
               </div>
-            </div>
+            )}
+            {isSuccess && (
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500 ring-8 ring-emerald-500/5">
+                <CheckCircle2 className="h-10 w-10" />
+              </div>
+            )}
+            {isFailed && (
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10 text-destructive ring-8 ring-destructive/5">
+                <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" strokeWidth="2"/>
+                  <path strokeLinecap="round" d="M12 8v4m0 4h.01" strokeWidth="2"/>
+                </svg>
+              </div>
+            )}
 
-            <div className="bg-card mt-6 rounded-xl p-5 text-left text-sm border border-border shadow-sm">
-              <div className="flex flex-col space-y-4">
-                <div className="flex justify-between items-center pb-4 border-b border-dashed border-border">
-                  <span className="text-muted-foreground font-medium">Amount Paid</span>
-                  <span className="text-2xl font-black text-foreground">{formatNaira(resultTxn.amount)}</span>
+            {/* ── Headline ── */}
+            {isProcessing && (
+              <>
+                <h2 className="text-2xl font-extrabold tracking-tight">Payment Received!</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Your payment was confirmed. We&apos;re now delivering your {title.toLowerCase()}&#8202;—&#8202;this usually takes a few seconds.
+                </p>
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-600">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  Processing in background
                 </div>
-                <Row label="Provider" value={<span className="font-medium">{resultTxn.provider_name || formValues.providerId}</span>} />
-                <Row label="Customer" value={<span className="font-medium">{resultTxn.identifier || formValues.identifier}</span>} />
-                {(planName || resultTxn.product_name) && <Row label="Plan" value={resultTxn.product_name || planName} />}
-                {resultTxn.token && (
-                  <div className="mt-4 bg-primary/5 p-4 rounded-lg border border-primary/20 text-center">
-                    <p className="text-xs font-semibold uppercase text-primary mb-1">Generated Token / PIN</p>
-                    <p className="text-lg font-mono font-bold tracking-widest text-foreground">{resultTxn.token}</p>
+              </>
+            )}
+            {isSuccess && (
+              <>
+                <h2 className="text-2xl font-extrabold tracking-tight text-emerald-600">Delivered!</h2>
+                <p className="mt-2 text-sm text-muted-foreground">Your {title.toLowerCase()} has been delivered successfully.</p>
+              </>
+            )}
+            {isFailed && (
+              <>
+                <h2 className="text-2xl font-extrabold tracking-tight text-destructive">Delivery Failed</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {txnErrorMessage ?? "We could not deliver your bill. Your wallet will be refunded automatically."}
+                </p>
+              </>
+            )}
+
+            {/* ── Receipt card ── */}
+            <div className="mt-6 rounded-xl border border-border bg-muted/30 p-5 text-left text-sm shadow-sm">
+              <div className="flex flex-col space-y-3">
+
+                {/* Amount — always shown */}
+                <div className="flex justify-between items-center pb-3 border-b border-dashed border-border">
+                  <span className="text-muted-foreground font-medium">Amount Paid</span>
+                  <span className="text-2xl font-black">{formatNaira(resultTxn.amount ?? formValues?.amount)}</span>
+                </div>
+
+                {providerName && <Row label="Provider" value={<span className="font-semibold">{providerName}</span>} />}
+                {customerId   && <Row label="Customer" value={<span className="font-medium">{customerId}</span>} />}
+                {(formValues?.planName || resultTxn.product_name) && (
+                  <Row label="Plan" value={formValues?.planName || resultTxn.product_name} />
+                )}
+
+                {/* Token / PIN — shown once delivered */}
+                {isSuccess && tokenValue && (
+                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800 p-4 text-center">
+                    <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-2">Your Token / PIN</p>
+                    <p className="text-xl font-mono font-black tracking-[0.25em] text-emerald-700 dark:text-emerald-300 select-all">{tokenValue}</p>
+                    <p className="mt-1 text-[10px] text-emerald-500">Tap to select &amp; copy</p>
                   </div>
                 )}
-                <Row label="Reference" value={<span className="font-mono text-xs bg-muted px-2 py-1 rounded">{resultTxn.reference}</span>} />
+
+                {/* Processing placeholder for token */}
+                {isProcessing && (
+                  <div className="mt-2 rounded-lg border border-dashed border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-center">
+                    <p className="text-xs text-amber-600 font-medium">Token / confirmation details will appear here once delivered</p>
+                  </div>
+                )}
+
+                <Row
+                  label="Reference"
+                  value={<span className="font-mono text-xs bg-muted px-2 py-1 rounded select-all">{resultTxn.reference ?? formValues?.reference}</span>}
+                />
+
+                {/* Status badge */}
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-muted-foreground font-medium">Status</span>
+                  {isProcessing && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400"><span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />Processing</span>}
+                  {isSuccess    && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" />Delivered</span>}
+                  {isFailed     && <span className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/30 px-2.5 py-0.5 text-xs font-semibold text-destructive">Failed</span>}
+                </div>
               </div>
             </div>
 
-            <div className="mt-8 flex gap-3">
-              <Button variant="outline" className="flex-1 font-semibold" onClick={() => router.push("/account/transactions")}>History</Button>
-              <Button className="flex-1 font-semibold" onClick={() => { setStep(1); setValue("identifier", ""); setValue("amount", ""); setResultTxn(null); }}>Done</Button>
+            {/* ── Actions ── */}
+            <div className="mt-6 flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 font-semibold"
+                onClick={() => router.push("/account/transactions")}
+              >
+                View History
+              </Button>
+              {isFailed ? (
+                <Button
+                  className="flex-1 font-semibold bg-destructive hover:bg-destructive/90"
+                  onClick={() => { setStep(2); setTxnStatus("processing"); setTxnErrorMessage(null); }}
+                >
+                  Try Again
+                </Button>
+              ) : (
+                <Button
+                  className="flex-1 font-semibold"
+                  onClick={() => {
+                    if (pollRef.current) clearInterval(pollRef.current);
+                    setStep(1);
+                    setValue("identifier", "");
+                    setValue("amount", "");
+                    setResultTxn(null);
+                    setTxnStatus("processing");
+                  }}
+                >
+                  {isProcessing ? "Pay Another" : "Done"}
+                </Button>
+              )}
             </div>
+
+            {/* ── Processing footnote ── */}
+            {isProcessing && (
+              <p className="mt-4 text-[11px] text-muted-foreground leading-relaxed">
+                This screen updates automatically. You can safely navigate away — we&apos;ll deliver your bill in the background and you can track progress in your transaction history.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -242,6 +499,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
               onEdit={() => setStep(1)}
               onPay={handlePay}
               submitting={submitting}
+              paymentStatusLabel={paymentStatusLabel}
             />
           )}
         </div>
