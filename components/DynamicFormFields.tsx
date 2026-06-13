@@ -69,6 +69,7 @@ export function DynamicFormFields({
         if (res.minimum_amount) setValue("amount", Number(res.minimum_amount));
         else if (res.amount) setValue("amount", Number(res.amount));
         else if (res.metadata?.Renewal_Amount) setValue("amount", Number(res.metadata.Renewal_Amount));
+        else if (category === "cable" && values.transactionType === "renew") setValue("amount", 5000); // Sandbox fallback
       }
     } catch (err: any) {
       setVerifiedData({ is_valid: false, message: err.message || "Verification failed" });
@@ -81,10 +82,7 @@ export function DynamicFormFields({
   return (
     <div className="space-y-6">
       {fields.map((field) => {
-        // Evaluate dynamic visibility
-        if (field.isHidden && field.isHidden({ ...values, providerSlug: provider?.slug })) {
-          return null;
-        }
+        const isHidden = field.isHidden && field.isHidden({ ...values, providerSlug: provider?.slug });
 
         return (
           <Controller
@@ -92,7 +90,7 @@ export function DynamicFormFields({
             name={field.name}
             control={control}
             render={({ field: formField, fieldState }) => (
-              <div className="space-y-2">
+              <div className={`space-y-2 ${isHidden ? 'hidden' : ''}`}>
                 <Label htmlFor={field.name} className={fieldState.error ? "text-destructive" : ""}>
                   {field.label}
                 </Label>

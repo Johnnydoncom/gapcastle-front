@@ -210,31 +210,6 @@ export default function Transactions() {
           </div>
         </div>
 
-        {/* ─── Summary Cards ─────────────────────────────────── */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="group relative overflow-hidden rounded-2xl border bg-card p-5 shadow-sm transition-all hover:shadow-md">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-            <div className="relative">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Spent</p>
-              <p className="mt-1.5 text-2xl font-extrabold tracking-tight">{formatNaira(totalSpent)}</p>
-            </div>
-          </div>
-          <div className="group relative overflow-hidden rounded-2xl border bg-card p-5 shadow-sm transition-all hover:shadow-md">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-            <div className="relative">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Cashback Earned</p>
-              <p className="mt-1.5 text-2xl font-extrabold tracking-tight text-emerald-600">{formatNaira(totalCashback)}</p>
-            </div>
-          </div>
-          <div className="group relative overflow-hidden rounded-2xl border bg-card p-5 shadow-sm transition-all hover:shadow-md">
-            <div className="absolute inset-0 bg-gradient-to-br from-sky-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-            <div className="relative">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Successful</p>
-              <p className="mt-1.5 text-2xl font-extrabold tracking-tight">{successCount}<span className="text-base font-medium text-muted-foreground ml-1">of {txns.length}</span></p>
-            </div>
-          </div>
-        </div>
-
         {/* ─── Filters ───────────────────────────────────────── */}
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">

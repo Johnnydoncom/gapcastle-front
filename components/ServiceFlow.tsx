@@ -468,7 +468,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
 
         <div className="px-4 sm:px-8">
           {step === 1 && (
-            <form onSubmit={handleSubmit(onReview)} className="space-y-8 animate-in fade-in duration-300 max-w-2xl mx-auto">
+            <form onSubmit={handleSubmit(onReview)} noValidate className="space-y-8 animate-in fade-in duration-300 max-w-2xl mx-auto">
               <DynamicFormFields
                 fields={config.fields}
                 control={control}
