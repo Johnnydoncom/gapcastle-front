@@ -15,9 +15,13 @@ import {
   Search, Download, Printer, Share2, X, Copy, Check,
   ArrowDownLeft, ArrowUpRight, ReceiptText, Clock, CheckCircle2,
   XCircle, Loader2, FileText, ChevronRight, Eye,
+  Zap, GraduationCap, Tv, Smartphone, ShieldCheck, Globe, Droplets, Flame, KeyRound,
 } from "lucide-react";
 import { useTransactionDetail } from "@/hooks/useGapcastle";
 import { TransactionReport } from "@/components/TransactionReport";
+import { getDeliveryDisplayInfo, getDeliveryColorClasses, formatTokenDisplay } from "@/lib/delivery-display";
+
+const deliveryIcons = { Zap, GraduationCap, Tv, Smartphone, ShieldCheck, Globe, Droplets, Flame, KeyRound } as const;
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
 
@@ -83,6 +87,7 @@ export default function Transactions() {
   const [selectedTxn, setSelectedTxn] = useState<any>(null);
   const [showReport, setShowReport] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState(false);
   const receiptRef = useRef<HTMLDivElement>(null);
 
   // Fetch detailed transaction when a transaction is selected
@@ -355,20 +360,57 @@ export default function Transactions() {
                     } />
                     <ReceiptRow label="Date" value={formatDate(activeTxn.created_at)} />
 
-                    {/* ── Token / PIN (Electricity prepaid, etc.) ── */}
-                    {activeTxn.token && (
-                      <div className="mt-3 mb-1 rounded-xl border-2 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-700 p-4 text-center">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-2">Your Token / PIN</p>
-                        <p className="text-lg font-mono font-black tracking-[0.2em] text-emerald-700 dark:text-emerald-300 select-all break-all">{activeTxn.token}</p>
-                        <button
-                          onClick={() => copyRef(activeTxn.token)}
-                          className="mt-2 inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:text-emerald-800 transition-colors"
-                        >
-                          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                          {copied ? "Copied!" : "Tap to copy"}
-                        </button>
-                      </div>
-                    )}
+                    {/* ── Service-aware delivery result ── */}
+                    {activeTxn.token && (() => {
+                      const serviceGroup = activeTxn.service_group ?? null;
+                      const deliveryInfo = getDeliveryDisplayInfo(serviceGroup);
+                      const colorClasses = getDeliveryColorClasses(deliveryInfo.color);
+                      const DeliveryIcon = deliveryIcons[deliveryInfo.icon];
+                      const formattedToken = formatTokenDisplay(activeTxn.token, serviceGroup);
+
+                      return (
+                        <div className={`mt-3 mb-1 rounded-xl border-2 ${colorClasses.border} ${colorClasses.borderDark} ${colorClasses.bg} ${colorClasses.bgDark} p-5 text-center relative overflow-hidden`}>
+                          {/* Decorative top accent */}
+                          <div className={`absolute inset-x-0 top-0 h-1 ${colorClasses.bg === 'bg-amber-50' ? 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-400' : colorClasses.bg === 'bg-emerald-50' ? 'bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400' : colorClasses.bg === 'bg-blue-50' ? 'bg-gradient-to-r from-blue-400 via-sky-400 to-blue-400' : colorClasses.bg === 'bg-violet-50' ? 'bg-gradient-to-r from-violet-400 via-purple-400 to-violet-400' : colorClasses.bg === 'bg-sky-50' ? 'bg-gradient-to-r from-sky-400 via-blue-400 to-sky-400' : colorClasses.bg === 'bg-cyan-50' ? 'bg-gradient-to-r from-cyan-400 via-teal-400 to-cyan-400' : 'bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-400'}`} />
+
+                          {/* Icon + Label */}
+                          <div className="flex items-center justify-center gap-2 mb-3">
+                            <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${colorClasses.iconBg} ${colorClasses.iconBgDark}`}>
+                              <DeliveryIcon className={`h-4 w-4 ${colorClasses.text} ${colorClasses.textDark}`} />
+                            </div>
+                            <p className={`text-[11px] font-bold uppercase tracking-widest ${colorClasses.text} ${colorClasses.textDark}`}>
+                              {deliveryInfo.label}
+                            </p>
+                          </div>
+
+                          {/* Token / PIN value */}
+                          <p className={`text-lg font-mono font-black tracking-[0.18em] leading-relaxed ${colorClasses.text} ${colorClasses.textDark} select-all break-all`}>
+                            {formattedToken}
+                          </p>
+
+                          {/* Hint text */}
+                          <p className={`mt-2 text-[10px] ${colorClasses.textMuted} font-medium`}>
+                            {deliveryInfo.hint}
+                          </p>
+
+                          {/* Copy button */}
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(activeTxn.token);
+                              setTokenCopied(true);
+                              setTimeout(() => setTokenCopied(false), 2500);
+                            }}
+                            className={`mt-3 inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all duration-200 ${tokenCopied
+                              ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                              : `${colorClasses.iconBg} ${colorClasses.iconBgDark} ${colorClasses.text} ${colorClasses.textDark} hover:opacity-80`
+                            }`}
+                          >
+                            {tokenCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                            {tokenCopied ? "Copied!" : "Copy code"}
+                          </button>
+                        </div>
+                      );
+                    })()}
                     <div className={`status ${activeTxn.status?.toLowerCase()}`} style={{ display: "none" }}>
                       {cfg.label}
                     </div>

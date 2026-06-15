@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -8,12 +8,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useWallet, useProviders, usePaymentGateways } from "@/hooks/useGapcastle";
 import { Button } from "@/components/ui/button";
 import { formatNaira } from "@/lib/format";
-import { ArrowLeft, CheckCircle2, Loader2, Wallet } from "lucide-react";
+import {
+  ArrowLeft, CheckCircle2, Loader2, Wallet, Copy, Check,
+  Zap, GraduationCap, Tv, Smartphone, ShieldCheck, Globe, Droplets, Flame, KeyRound, Download,
+} from "lucide-react";
 import { toast } from "sonner";
 import { serviceRegistry } from "@/lib/services/registry";
 import { DynamicFormFields } from "@/components/DynamicFormFields";
 import { ReviewAndPay, type OrderSummaryItem } from "@/components/ReviewAndPay";
 import { openGatewayModal } from "@/lib/gateway-sdk";
+import { getDeliveryDisplayInfo, getDeliveryColorClasses, formatTokenDisplay } from "@/lib/delivery-display";
+
+const deliveryIcons = { Zap, GraduationCap, Tv, Smartphone, ShieldCheck, Globe, Droplets, Flame, KeyRound } as const;
 
 export interface ServiceFlowProps {
   category: string;
@@ -50,6 +56,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const [submitting, setSubmitting] = useState(false);
   const [resultTxn, setResultTxn] = useState<any>(null);
   const [verifiedData, setVerifiedData] = useState<any>(null);
+  const [tokenCopied, setTokenCopied] = useState(false);
   const [formValues, setFormValues] = useState<any>(null);
   /** Human-readable status shown below the Pay button while the modal / poll is active */
   const [paymentStatusLabel, setPaymentStatusLabel] = useState<string | null>(null);
@@ -287,6 +294,18 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
     const customerId = resultTxn.customer ?? formValues?.identifier;
     const tokenValue = resultTxn.token ?? resultTxn.metadata?.token ?? null;
     const certUrl = resultTxn.cert_url ?? resultTxn.metadata?.content?.transactions?.Certificate_Url ?? null;
+    const serviceGroup = resultTxn.service_group ?? config?.slug ?? category;
+    const deliveryInfo = getDeliveryDisplayInfo(serviceGroup);
+    const colorClasses = getDeliveryColorClasses(deliveryInfo.color);
+    const DeliveryIcon = deliveryIcons[deliveryInfo.icon];
+    const formattedToken = tokenValue ? formatTokenDisplay(tokenValue, serviceGroup) : null;
+
+    const copyToken = async () => {
+      if (!tokenValue) return;
+      await navigator.clipboard.writeText(tokenValue);
+      setTokenCopied(true);
+      setTimeout(() => setTokenCopied(false), 2500);
+    };
 
     return (
       <div className="mx-auto max-w-md py-8 animate-in fade-in zoom-in duration-300">
@@ -366,32 +385,75 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                   <Row label="Plan" value={formValues?.planName || resultTxn.product_name} />
                 )}
 
-                {/* Token / PIN — shown once delivered */}
+                {/* ── Service-aware delivery result ── */}
                 {isSuccess && tokenValue && (
-                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800 p-4 text-center">
-                    <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-2">Your Token / PIN</p>
-                    <p className="text-xl font-mono font-black tracking-[0.25em] text-emerald-700 dark:text-emerald-300 select-all">{tokenValue}</p>
-                    <p className="mt-1 text-[10px] text-emerald-500">Tap to select &amp; copy</p>
+                  <div className={`mt-3 rounded-xl border-2 ${colorClasses.border} ${colorClasses.borderDark} ${colorClasses.bg} ${colorClasses.bgDark} p-5 text-center relative overflow-hidden`}>
+                    {/* Decorative top accent */}
+                    <div className={`absolute inset-x-0 top-0 h-1 ${colorClasses.bg === 'bg-amber-50' ? 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-400' : colorClasses.bg === 'bg-emerald-50' ? 'bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400' : colorClasses.bg === 'bg-blue-50' ? 'bg-gradient-to-r from-blue-400 via-sky-400 to-blue-400' : colorClasses.bg === 'bg-violet-50' ? 'bg-gradient-to-r from-violet-400 via-purple-400 to-violet-400' : colorClasses.bg === 'bg-sky-50' ? 'bg-gradient-to-r from-sky-400 via-blue-400 to-sky-400' : colorClasses.bg === 'bg-cyan-50' ? 'bg-gradient-to-r from-cyan-400 via-teal-400 to-cyan-400' : 'bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-400'}`} />
+
+                    {/* Icon + Label */}
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${colorClasses.iconBg} ${colorClasses.iconBgDark}`}>
+                        <DeliveryIcon className={`h-4 w-4 ${colorClasses.text} ${colorClasses.textDark}`} />
+                      </div>
+                      <p className={`text-[11px] font-bold uppercase tracking-widest ${colorClasses.text} ${colorClasses.textDark}`}>
+                        {deliveryInfo.label}
+                      </p>
+                    </div>
+
+                    {/* Token / PIN value */}
+                    <p className={`text-base font-mono font-black tracking-[0.1em] leading-relaxed ${colorClasses.text} ${colorClasses.textDark} select-all break-all`}>
+                      {formattedToken}
+                    </p>
+
+                    {/* Hint text */}
+                    <p className={`mt-2 text-[10px] ${colorClasses.textMuted} font-medium`}>
+                      {deliveryInfo.hint}
+                    </p>
+
+                    {/* Copy button */}
+                    <button
+                      onClick={copyToken}
+                      className={`mt-3 inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all duration-200 ${tokenCopied
+                        ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                        : `${colorClasses.iconBg} ${colorClasses.iconBgDark} ${colorClasses.text} ${colorClasses.textDark} hover:opacity-80`
+                        }`}
+                    >
+                      {tokenCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      {tokenCopied ? "Copied!" : "Copy code"}
+                    </button>
                   </div>
                 )}
 
-                {/* Processing placeholder for token */}
+                {/* Processing placeholder */}
                 {isProcessing && (
-                  <div className="mt-2 rounded-lg border border-dashed border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-center">
-                    <p className="text-xs text-amber-600 font-medium">Token / confirmation details will appear here once delivered</p>
+                  <div className="mt-3 rounded-xl border-2 border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/20 p-4 text-center">
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" />
+                      <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">Awaiting delivery</p>
+                    </div>
+                    <p className="text-[10px] text-amber-500/80">Your {deliveryInfo.label.toLowerCase()} will appear here once delivered</p>
                   </div>
                 )}
 
-                {/* Insurance certificate URL */}
+                {/* Insurance certificate download */}
                 {certUrl && (
-                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800 p-4 text-center">
-                    <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3">Insurance Certificate</p>
+                  <div className="mt-3 rounded-xl border-2 border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/30 p-5 text-center">
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/40">
+                        <ShieldCheck className="h-4 w-4 text-teal-700 dark:text-teal-300" />
+                      </div>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-teal-700 dark:text-teal-300">
+                        Insurance Certificate
+                      </p>
+                    </div>
                     <a
                       href={certUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+                      className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
                     >
+                      <Download className="h-4 w-4" />
                       Download Certificate
                     </a>
                   </div>
