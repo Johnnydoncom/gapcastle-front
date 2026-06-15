@@ -93,7 +93,7 @@ async function openFlutterwave(params: GatewayModalParams): Promise<GatewayResul
   if (!FlutterwaveCheckout) throw new Error("Flutterwave SDK failed to initialise.");
 
   return new Promise<GatewayResult>((resolve) => {
-    FlutterwaveCheckout({
+    const modal = FlutterwaveCheckout({
       public_key: params.publicKey,
       tx_ref: params.reference,
       amount: params.amount,
@@ -108,6 +108,11 @@ async function openFlutterwave(params: GatewayModalParams): Promise<GatewayResul
         logo: `${window.location.origin}/logo.png`,
       },
       callback: (response: { status: string; tx_ref: string }) => {
+        // Flutterwave v3 does not close the modal automatically on success
+        if (modal && typeof modal.close === 'function') {
+          modal.close();
+        }
+        
         if (response.status === "successful" || response.status === "completed") {
           resolve({ status: "success", reference: response.tx_ref });
         } else {
@@ -142,7 +147,7 @@ async function openMonnify(params: GatewayModalParams): Promise<GatewayResult> {
       apiKey: params.publicKey,
       contractCode: params.sdkConfig?.contract_code ?? "",
       paymentDescription: "Bill Payment",
-      isTestMode: process.env.NODE_ENV !== "production",
+      isTestMode: params.publicKey.toUpperCase().includes("TEST"),
       onComplete: (response: { paymentStatus: string; transactionReference: string }) => {
         if (response.paymentStatus === "PAID") {
           resolve({ status: "success", reference: response.transactionReference });

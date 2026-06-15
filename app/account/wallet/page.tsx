@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { openGatewayModal } from "@/lib/gateway-sdk";
 
 export default function WalletPage() {
   const { data: wallet } = useWallet();
@@ -110,6 +111,8 @@ export default function WalletPage() {
     setLoading(true);
     try {
       if (!token) throw new Error("Authentication token not found.");
+      const selectedGateway = fundingGateways.find(g => g.slug === selectedGatewaySlug);
+      
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
       const res = await fetch(`${API_URL}/wallet/fund`, {
         method: "POST",
@@ -131,10 +134,63 @@ export default function WalletPage() {
       }
       if (!res.ok) throw new Error(data.message || "Failed to initiate funding");
       
-      if (data.data?.payment_url) {
-        window.location.href = data.data.payment_url;
+      const txnData = data.data;
+      if (!txnData?.payment_url && !txnData?.access_code && !txnData?.reference) {
+        throw new Error("Failed to retrieve payment details");
+      }
+
+      if (!selectedGateway) {
+        if (txnData?.payment_url) {
+          window.location.href = txnData.payment_url;
+          return; // Navigating away
+        } else {
+          throw new Error("Failed to retrieve payment link");
+        }
+      }
+
+      const userEmail = (session?.user as any)?.email ?? `user-${txnData.reference}@gapcastle.ng`;
+
+      const gatewayResult = await openGatewayModal({
+        gatewaySlug: selectedGateway.slug,
+        reference: txnData.reference,
+        accessCode: txnData.access_code ?? "",
+        paymentUrl: txnData.payment_url ?? null,
+        amount: Number(txnData.total ?? amount),
+        email: userEmail,
+        name: (session?.user as any)?.name ?? undefined,
+        publicKey: selectedGateway.public_key ?? "",
+        sdkConfig: selectedGateway.sdk_config ?? {},
+        currency: "NGN",
+      });
+
+      if (gatewayResult.status === "cancelled") {
+        toast.info("Payment cancelled.");
+        return;
+      }
+
+      if (gatewayResult.status === "error") {
+        throw new Error(gatewayResult.message);
+      }
+
+      // Verify payment with the backend
+      const verifyRes = await fetch(`${API_URL}/wallet/verify-payment`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reference: txnData.reference }),
+      });
+
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok) {
+        toast.error(verifyData?.message || "Payment verification failed.");
       } else {
-        toast.error("Failed to retrieve payment link");
+        toast.success("Wallet funded successfully!");
+        qc.invalidateQueries({ queryKey: ["wallet"] });
+        qc.invalidateQueries({ queryKey: ["transactions"] });
+        setFundOpen(false);
+        setAmount(0);
       }
     } catch (error: any) {
       toast.error(error.message);
