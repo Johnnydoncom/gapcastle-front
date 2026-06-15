@@ -384,7 +384,7 @@ export default function Transactions() {
                           </div>
 
                           {/* Token / PIN value */}
-                          <p className={`text-lg font-mono font-black tracking-[0.18em] leading-relaxed ${colorClasses.text} ${colorClasses.textDark} select-all break-all`}>
+                          <p className={`text-sm font-mono font-black tracking-[0.1em] leading-relaxed ${colorClasses.text} ${colorClasses.textDark} select-all break-all`}>
                             {formattedToken}
                           </p>
 
@@ -403,7 +403,7 @@ export default function Transactions() {
                             className={`mt-3 inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold transition-all duration-200 ${tokenCopied
                               ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                               : `${colorClasses.iconBg} ${colorClasses.iconBgDark} ${colorClasses.text} ${colorClasses.textDark} hover:opacity-80`
-                            }`}
+                              }`}
                           >
                             {tokenCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                             {tokenCopied ? "Copied!" : "Copy code"}
