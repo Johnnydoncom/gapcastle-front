@@ -295,7 +295,7 @@ export default function Transactions() {
 
       {/* ─── Transaction Detail / Receipt Dialog ───────────── */}
       <Dialog open={!!selectedTxn && !showReport} onOpenChange={(open) => !open && setSelectedTxn(null)}>
-        <DialogContent className="max-w-md rounded-2xl p-0 overflow-hidden">
+        <DialogContent className="max-w-md rounded-2xl p-0 max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogTitle>&nbsp;</DialogTitle>
           {activeTxn && (() => {
             const isCredit = activeTxn.type === "wallet_funding" || activeTxn.type === "cashback";
