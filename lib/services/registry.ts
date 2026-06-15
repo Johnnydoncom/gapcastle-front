@@ -13,7 +13,8 @@ export type FieldType =
   | "textarea"
   | "date"
   | "amount_quick_select"
-  | "select";
+  | "select"
+  | "insurance_fields";
 
 export interface ServiceFieldConfig {
   name: string;
@@ -182,46 +183,49 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
     schema: z.object({
       providerId: z.number({ message: "Please select an insurance provider" }),
       planId: z.number({ message: "Please select a plan" }),
-      identifier: z.string().min(2, "Full Name is required"), // Customer name
+      identifier: z.string().min(2, "Plate number is required"), // billersCode = Plate_Number
       phone: phoneSchema,
-      dob: z.string().optional(),
-      address: z.string().optional(),
-      nextOfKinName: z.string().optional(),
-      nextOfKinPhone: z.string().optional(),
-      businessOccupation: z.string().optional(),
-      insuranceType: z.enum(["private", "commercial"]).optional(),
-      plateNumber: z.string().optional(),
-      engineNumber: z.string().optional(),
-      chassisNumber: z.string().optional(),
-      vehicleMake: z.string().optional(),
-      vehicleModel: z.string().optional(),
-      vehicleColor: z.string().optional(),
-      yearOfManufacture: z.string().optional(),
+      email: emailSchema,
+      // VTPass motor insurance fields
+      Insured_Name: z.string().min(2, "Insured name is required"),
+      Plate_Number: z.string().min(3, "Plate number is required"),
+      Chasis_Number: z.string().min(3, "Chassis number is required"),
+      YearofMake: z.string().min(4, "Year of manufacture is required"),
+      engine_capacity: z.string().min(1, "Engine capacity is required"),
+      vehicle_make: z.string().min(1, "Vehicle make is required"),
+      vehicle_model: z.string().min(1, "Vehicle model is required"),
+      vehicle_color: z.string().min(1, "Vehicle colour is required"),
+      state: z.string().min(1, "State is required"),
+      lga: z.string().min(1, "LGA is required"),
       amount: amountSchema,
     }),
-    defaultValues: { providerId: undefined, planId: undefined, identifier: "", phone: "", amount: "" },
+    defaultValues: {
+      providerId: undefined,
+      planId: undefined,
+      identifier: "",
+      phone: "",
+      email: "",
+      Insured_Name: "",
+      Plate_Number: "",
+      Chasis_Number: "",
+      YearofMake: "",
+      engine_capacity: "",
+      vehicle_make: "",
+      vehicle_model: "",
+      vehicle_color: "",
+      state: "",
+      lga: "",
+      amount: "",
+    },
     fields: [
       { name: "providerId", label: "Insurance Provider", type: "provider_grid" },
-      { name: "planId", label: "Insurance Plan", type: "plan_grid" },
-      { name: "identifier", label: "Full Name", type: "text", placeholder: "Insured Name" },
+      { name: "planId", label: "Insurance Plan (Vehicle Type)", type: "plan_grid" },
       { name: "phone", label: "Phone Number", type: "phone", placeholder: "08012345678" },
-      // The rest are dynamic based on provider (Personal vs Third Party Auto). 
-      // We will handle dynamic rendering of these in DynamicFormFields by checking provider slug.
-      { name: "dob", label: "Date of Birth", type: "date", isHidden: (vals) => vals.providerSlug === "third-party-motor" },
-      { name: "address", label: "Contact Address", type: "textarea", placeholder: "Full Address" },
-      { name: "nextOfKinName", label: "Next of Kin Name", type: "text", isHidden: (vals) => vals.providerSlug === "third-party-motor" },
-      { name: "nextOfKinPhone", label: "Next of Kin Phone", type: "phone", isHidden: (vals) => vals.providerSlug === "third-party-motor" },
-      { name: "businessOccupation", label: "Business Occupation", type: "text", isHidden: (vals) => vals.providerSlug === "third-party-motor" },
-      { name: "insuranceType", label: "Insurance Type", type: "radio", options: [{ label: "Private", value: "private" }, { label: "Commercial", value: "commercial" }], isHidden: (vals) => vals.providerSlug !== "third-party-motor" },
-      { name: "plateNumber", label: "Plate Number", type: "text", isHidden: (vals) => vals.providerSlug !== "third-party-motor" },
-      { name: "engineNumber", label: "Engine Number", type: "text", isHidden: (vals) => vals.providerSlug !== "third-party-motor" },
-      { name: "chassisNumber", label: "Chassis Number", type: "text", isHidden: (vals) => vals.providerSlug !== "third-party-motor" },
-      { name: "vehicleMake", label: "Vehicle Make", type: "select", options: [{ label: "Toyota", value: "Toyota" }, { label: "Honda", value: "Honda" }, { label: "Mercedes-Benz", value: "Mercedes-Benz" }, { label: "Ford", value: "Ford" }, { label: "Other", value: "Other" }], isHidden: (vals) => vals.providerSlug !== "third-party-motor" },
-      { name: "vehicleModel", label: "Vehicle Model", type: "text", isHidden: (vals) => vals.providerSlug !== "third-party-motor" },
-      { name: "vehicleColor", label: "Vehicle Color", type: "text", isHidden: (vals) => vals.providerSlug !== "third-party-motor" },
-      { name: "yearOfManufacture", label: "Year of Manufacture", type: "number", isHidden: (vals) => vals.providerSlug !== "third-party-motor" },
+      // Sentinel field — renders the full InsuranceFields component
+      { name: "insurance_fields", label: "", type: "insurance_fields" },
     ],
   },
+
   kyc: {
     slug: "kyc",
     title: "KYC Verification",

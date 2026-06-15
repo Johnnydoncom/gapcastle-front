@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ProviderSelect } from "@/components/ui/ProviderSelect";
 import { ProductSelect } from "@/components/ui/ProductSelect";
+import { InsuranceFields } from "@/components/InsuranceFields";
 
 interface DynamicFormFieldsProps {
   fields: ServiceFieldConfig[];
@@ -84,11 +85,19 @@ export function DynamicFormFields({
       {fields.map((field) => {
         const isHidden = field.isHidden && field.isHidden({ ...values, providerSlug: provider?.slug });
 
+        // Insurance fields — self-contained component with its own cascading state
+        if (field.type === "insurance_fields") {
+          return (
+            <InsuranceFields key="insurance_fields" control={control} watch={watch} setValue={setValue} />
+          );
+        }
+
         return (
           <Controller
             key={field.name}
             name={field.name}
             control={control}
+
             render={({ field: formField, fieldState }) => (
               <div className={`space-y-2 ${isHidden ? 'hidden' : ''}`}>
                 <Label htmlFor={field.name} className={fieldState.error ? "text-destructive" : ""}>

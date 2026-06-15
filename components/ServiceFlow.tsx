@@ -286,6 +286,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
     const providerName = provider?.name ?? resultTxn.provider_name ?? formValues?.providerId;
     const customerId = resultTxn.customer ?? formValues?.identifier;
     const tokenValue = resultTxn.token ?? resultTxn.metadata?.token ?? null;
+    const certUrl = resultTxn.cert_url ?? resultTxn.metadata?.content?.transactions?.Certificate_Url ?? null;
 
     return (
       <div className="mx-auto max-w-md py-8 animate-in fade-in zoom-in duration-300">
@@ -378,6 +379,21 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                 {isProcessing && (
                   <div className="mt-2 rounded-lg border border-dashed border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-center">
                     <p className="text-xs text-amber-600 font-medium">Token / confirmation details will appear here once delivered</p>
+                  </div>
+                )}
+
+                {/* Insurance certificate URL */}
+                {certUrl && (
+                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800 p-4 text-center">
+                    <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3">Insurance Certificate</p>
+                    <a
+                      href={certUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+                    >
+                      Download Certificate
+                    </a>
                   </div>
                 )}
 
