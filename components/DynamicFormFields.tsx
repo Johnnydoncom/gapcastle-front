@@ -71,6 +71,15 @@ export function DynamicFormFields({
         else if (res.amount) setValue("amount", Number(res.amount));
         else if (res.metadata?.Renewal_Amount) setValue("amount", Number(res.metadata.Renewal_Amount));
         else if (category === "cable" && values.transactionType === "renew") setValue("amount", 5000); // Sandbox fallback
+
+        // Auto-select Smile AccountId if present
+        const accList = res.metadata?.AccountList?.Account;
+        if (accList) {
+          const accounts = Array.isArray(accList) ? accList : [accList];
+          if (accounts.length > 0) {
+            setValue("accountId", accounts[0].AccountId);
+          }
+        }
       }
     } catch (err: any) {
       setVerifiedData({ is_valid: false, message: err.message || "Verification failed" });
@@ -176,6 +185,33 @@ export function DynamicFormFields({
                             {verifiedData.metadata?.Status && <p className="text-muted-foreground text-xs mt-1">Status: {verifiedData.metadata.Status}</p>}
                             {verifiedData.metadata?.Due_Date && <p className="text-muted-foreground text-xs mt-1">Due Date: {new Date(verifiedData.metadata.Due_Date).toLocaleDateString()}</p>}
                             {verifiedData.metadata?.Customer_Type && <p className="text-muted-foreground text-xs mt-1">Type: {verifiedData.metadata.Customer_Type}</p>}
+                            
+                            {/* Smile Network Accounts */}
+                            {verifiedData.metadata?.AccountList?.Account && (() => {
+                              const accList = verifiedData.metadata.AccountList.Account;
+                              const accounts = Array.isArray(accList) ? accList : [accList];
+                              if (accounts.length === 0) return null;
+                              return (
+                                <div className="mt-4 space-y-2 border-t pt-3">
+                                  <Label className="text-xs font-semibold">Select Smile Account to Fund</Label>
+                                  <Select 
+                                    value={values.accountId || ""} 
+                                    onValueChange={(val) => setValue("accountId", val)}
+                                  >
+                                    <SelectTrigger className="h-9">
+                                      <SelectValue placeholder="Select an account..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {accounts.map((acc: any) => (
+                                        <SelectItem key={acc.AccountId} value={acc.AccountId}>
+                                          {acc.FriendlyName} ({acc.AccountId})
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              );
+                            })()}
                           </>
                         )}
                       </div>
@@ -231,7 +267,7 @@ export function DynamicFormFields({
                     onValueChange={formField.onChange}
                     className="grid-cols-2"
                   >
-                    {field.options.map(opt => (
+                    {field.options.map((opt: any) => (
                       <RadioCard key={opt.value} value={opt.value.toString()} className="py-3">
                         <span className="text-sm font-medium">{opt.label}</span>
                       </RadioCard>
@@ -245,7 +281,7 @@ export function DynamicFormFields({
                       <SelectValue placeholder={field.placeholder || "Select option"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {field.options.map(opt => (
+                      {field.options.map((opt: any) => (
                         <SelectItem key={opt.value} value={opt.value.toString()}>
                           {opt.label}
                         </SelectItem>

@@ -134,12 +134,13 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       amount: amountSchema,
       planName: z.string().optional(),
       variationCode: z.string().optional(),
+      accountId: z.string().optional(), // Used by Smile
     }),
-    defaultValues: { providerId: undefined, planId: undefined, identifier: "", amount: "" },
+    defaultValues: { providerId: undefined, planId: undefined, identifier: "", amount: "", accountId: "" },
     fields: [
       { name: "providerId", label: "ISP Provider", type: "provider_grid" },
+      { name: "identifier", label: "Smile Email / Account ID", type: "verify_input", placeholder: "Enter Email or Account ID" },
       { name: "planId", label: "Data Plan", type: "plan_grid" },
-      { name: "identifier", label: "Account / Device ID", type: "text", placeholder: "Enter Account ID" },
     ],
   },
   pin: {
