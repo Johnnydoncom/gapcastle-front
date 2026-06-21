@@ -29,6 +29,7 @@ export const authOptions: NextAuthOptions = {
                             id: resData.data.user.id.toString(),
                             name: resData.data.user.name,
                             email: resData.data.user.email,
+                            phone: resData.data.user.phone ?? "",
                             token: resData.data.token,
                             roles: resData.data.user.roles || [],
                             permissions: resData.data.user.permissions || [],
@@ -47,6 +48,7 @@ export const authOptions: NextAuthOptions = {
             if (user) {
                 token.accessToken = user.token;
                 token.id = user.id;
+                token.phone = user.phone;
                 token.roles = user.roles;
                 token.permissions = user.permissions;
             }
@@ -56,6 +58,7 @@ export const authOptions: NextAuthOptions = {
             session.accessToken = token.accessToken as string;
             if (session.user) {
                 session.user.id = token.id as string;
+                session.user.phone = token.phone as string;
                 session.user.roles = token.roles as string[];
                 session.user.permissions = token.permissions as string[];
             }

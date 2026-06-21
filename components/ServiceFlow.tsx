@@ -170,11 +170,14 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
       if (!token) throw new Error("Session expired. Please log in again.");
 
       // ── Step 1: create the transaction on the backend ──────────────────────
+      // For services that don't collect an identifier field (e.g. pin, education),
+      // fall back to the logged-in user's phone number as the customer value.
+      const userPhone = (session?.user as any)?.phone ?? "";
       const payload: any = {
         bill_service_slug: groupSlug,
         bill_provider_id: formValues.providerId,
         bill_product_id: formValues.planId || null,
-        customer: formValues.identifier,
+        customer: formValues.identifier || userPhone,
         amount: Number(formValues.amount),
         metadata: { ...formValues },
         payment_gateway_id: selectedGateway?.slug === 'wallet' ? null : selectedGatewayId,
@@ -198,7 +201,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
       if (!res.ok) throw new Error(result.message || "Payment failed");
 
       // ── Step 2a: wallet pay — done immediately ─────────────────────────────
-      if (!result.data?.payment_url && !result.data?.access_code) {
+      if (selectedGateway?.slug === 'wallet') {
         setResultTxn(result.data || result);
         qc.invalidateQueries({ queryKey: ["wallet"] });
         qc.invalidateQueries({ queryKey: ["transactions"] });

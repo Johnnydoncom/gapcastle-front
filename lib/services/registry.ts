@@ -113,15 +113,13 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       meterType: z.enum(["prepaid", "postpaid"], { message: "Select meter type" }),
       identifier: meterNumberSchema,
       amount: amountSchema,
-      phone: phoneSchema,
     }),
-    defaultValues: { providerId: undefined, meterType: "prepaid", identifier: "", amount: "", phone: "" },
+    defaultValues: { providerId: undefined, meterType: "prepaid", identifier: "", amount: "" },
     fields: [
       { name: "providerId", label: "Distribution Company (Disco)", type: "provider_grid" },
       { name: "meterType", label: "Meter Type", type: "radio", options: [{ label: "Prepaid", value: "prepaid" }, { label: "Postpaid", value: "postpaid" }] },
       { name: "identifier", label: "Meter Number", type: "verify_input", placeholder: "Enter meter number" },
       { name: "amount", label: "Amount (₦)", type: "number", placeholder: "0.00" },
-      { name: "phone", label: "Phone Number (for token delivery)", type: "phone", placeholder: "08012345678" },
     ],
   },
   internet: {
@@ -149,15 +147,13 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
     schema: z.object({
       providerId: z.number({ message: "Please select an Exam Type" }),
       quantity: z.number().min(1).max(20),
-      identifier: phoneSchema,
       amount: amountSchema,
-      planId: z.number().optional(), // For auto-calc
+      planId: z.number().optional(),
     }),
-    defaultValues: { providerId: undefined, quantity: 1, identifier: "", amount: "" },
+    defaultValues: { providerId: undefined, quantity: 1, amount: "" },
     fields: [
       { name: "providerId", label: "Exam Type", type: "provider_grid" },
       { name: "quantity", label: "Quantity", type: "number" },
-      { name: "identifier", label: "Phone Number (for PIN delivery)", type: "phone", placeholder: "08012345678" },
     ],
   },
   education: {
@@ -167,15 +163,13 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       providerId: z.number({ message: "Please select an Institution" }),
       planId: z.number({ message: "Please select a Product" }),
       quantity: z.number().min(1).max(20),
-      identifier: phoneSchema,
       amount: amountSchema,
     }),
-    defaultValues: { providerId: undefined, planId: undefined, quantity: 1, identifier: "", amount: "" },
+    defaultValues: { providerId: undefined, planId: undefined, quantity: 1, amount: "" },
     fields: [
       { name: "providerId", label: "Institution / Exam Body", type: "provider_grid" },
       { name: "planId", label: "Product / Variation", type: "plan_grid" },
       { name: "quantity", label: "Quantity", type: "number" },
-      { name: "identifier", label: "Phone Number (for PIN delivery)", type: "phone", placeholder: "08012345678" },
     ],
   },
   insurance: {

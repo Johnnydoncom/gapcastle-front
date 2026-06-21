@@ -256,7 +256,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
       if (!res.ok) throw new Error(result.message || "Payment failed");
 
       // ── Step 2a: wallet pay — done immediately ─────────────────────────────
-      if (!result.data?.payment_url && !result.data?.access_code) {
+      if (selectedGateway?.slug === 'wallet') {
         setResultTxn(result.data || result);
         qc.invalidateQueries({ queryKey: ["wallet"] });
         qc.invalidateQueries({ queryKey: ["transactions"] });
