@@ -2,7 +2,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { formatNaira } from "@/lib/format";
-import { Wallet, Edit2, Loader2, ShieldCheck } from "lucide-react";
+import { Wallet, Edit2, Loader2, ShieldCheck, Gift } from "lucide-react";
 
 export interface OrderSummaryItem {
   label: string;
@@ -16,6 +16,8 @@ export interface ReviewAndPayProps {
   items: OrderSummaryItem[];
   /** The total amount to charge */
   amount: number;
+  /** Cashback percentage for this service (0–100). E.g. 1.5 means 1.5% */
+  cashbackPct?: number;
   /** Wallet balance */
   balance: number;
   /** Available payment gateways */
@@ -38,6 +40,7 @@ export function ReviewAndPay({
   title,
   items,
   amount,
+  cashbackPct = 0,
   balance,
   gateways,
   selectedGatewayId,
@@ -50,6 +53,8 @@ export function ReviewAndPay({
   const selectedGateway = gateways.find((g: any) => g.id === selectedGatewayId);
   const isWallet = selectedGateway?.slug === "wallet";
   const insufficientBalance = isWallet && amount > balance;
+
+  const earnableCashback = cashbackPct > 0 ? amount * (cashbackPct / 100) : 0;
 
   return (
     <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
@@ -81,6 +86,26 @@ export function ReviewAndPay({
           <span className="text-sm font-semibold text-muted-foreground">Total</span>
           <span className="text-xl font-black tracking-tight text-primary">{formatNaira(amount)}</span>
         </div>
+
+        {/* Cashback earnable row */}
+        {earnableCashback > 0 && (
+          <div className="mt-3 flex items-center gap-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 ring-1 ring-emerald-200 dark:ring-emerald-800">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
+              <Gift className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                You&apos;ll earn cashback on this payment
+              </p>
+              <p className="text-[11px] text-emerald-600/80 dark:text-emerald-500 mt-0.5">
+                {cashbackPct}% cashback · credited after delivery
+              </p>
+            </div>
+            <span className="text-base font-black text-emerald-600 dark:text-emerald-400 shrink-0">
+              +{formatNaira(earnableCashback)}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Payment Method */}

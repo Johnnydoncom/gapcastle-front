@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useWallet, useProviders, usePaymentGateways } from "@/hooks/useGapcastle";
+import { useWallet, useProviders, usePaymentGateways, useServices } from "@/hooks/useGapcastle";
 import { Button } from "@/components/ui/button";
 import { formatNaira } from "@/lib/format";
 import {
@@ -34,13 +34,18 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const { data: session } = useSession();
   const qc = useQueryClient();
   const { data: wallet } = useWallet(initialWallet);
+  const { data: services = [] } = useServices();
 
   const config = serviceRegistry[category];
   const groupSlug = config?.slug || category;
 
   const { data: providers = [] } = useProviders(groupSlug, initialProviders);
 
-  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm({
+  // cashback_percentage for this service (from the /services endpoint)
+  const currentService = (services as any[]).find((s: any) => s.slug === groupSlug);
+  const cashbackPct = Number(currentService?.cashback_percentage ?? 0);
+
+  const { control, handleSubmit, watch, setValue, formState: { errors }, reset } = useForm({
     resolver: config ? zodResolver(config.schema) : undefined,
     defaultValues: config?.defaultValues || {},
   });
@@ -202,10 +207,20 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
 
       // ── Step 2a: wallet pay — done immediately ─────────────────────────────
       if (selectedGateway?.slug === 'wallet') {
-        setResultTxn(result.data || result);
-        qc.invalidateQueries({ queryKey: ["wallet"] });
-        qc.invalidateQueries({ queryKey: ["transactions"] });
+        const txnData = result.data || result;
+        setResultTxn(txnData);
+        setTxnStatus(txnData.status === "successful" ? "successful" : "processing");
+        setSubmitting(false);
         setStep(3);
+        
+        if (txnData.status !== "successful") {
+          qc.invalidateQueries({ queryKey: ["wallet"] });
+          qc.invalidateQueries({ queryKey: ["transactions"] });
+          pollTransactionStatus(txnData.reference, token as string, txnData);
+        } else {
+          qc.invalidateQueries({ queryKey: ["wallet"] });
+          qc.invalidateQueries({ queryKey: ["transactions"] });
+        }
         return;
       }
 
@@ -499,8 +514,8 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                   onClick={() => {
                     if (pollRef.current) clearInterval(pollRef.current);
                     setStep(1);
-                    setValue("identifier", "");
-                    setValue("amount", "");
+                    reset(config?.defaultValues || {});
+                    setVerifiedData(null);
                     setResultTxn(null);
                     setTxnStatus("processing");
                   }}
@@ -572,6 +587,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
               title={title}
               items={buildSummaryItems(formValues, providers, verifiedData)}
               amount={Number(formValues.amount)}
+              cashbackPct={cashbackPct}
               balance={balance}
               gateways={gateways}
               selectedGatewayId={selectedGatewayId}
