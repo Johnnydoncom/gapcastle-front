@@ -43,7 +43,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
                 <li>Cable TV & Electricity</li>
                 <li>Internet & Education</li>
                 <li>Insurance & Loans</li>
-                <li>Recharge PINs</li>
+                <li>Water, Gas & Collections</li>
               </ul>
             </div>
             <div>

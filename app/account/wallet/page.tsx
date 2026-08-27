@@ -158,6 +158,7 @@ export default function WalletPage() {
         amount: Number(txnData.total ?? amount),
         email: userEmail,
         name: (session?.user as any)?.name ?? undefined,
+        phone: (session?.user as any)?.phone ?? undefined,
         publicKey: selectedGateway.public_key ?? "",
         sdkConfig: selectedGateway.sdk_config ?? {},
         currency: "NGN",
@@ -172,14 +173,16 @@ export default function WalletPage() {
         throw new Error(gatewayResult.message);
       }
 
-      // Verify payment with the backend
+      // Verify payment with the backend. ALATPay returns its own transaction id
+      // (gatewayReference) which the backend needs to confirm the charge.
+      const gatewayReference = gatewayResult.status === "success" ? gatewayResult.gatewayReference : undefined;
       const verifyRes = await fetch(`${API_URL}/wallet/verify-payment`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ reference: txnData.reference }),
+        body: JSON.stringify({ reference: txnData.reference, gateway_reference: gatewayReference }),
       });
 
       const verifyData = await verifyRes.json();

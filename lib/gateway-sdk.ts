@@ -23,6 +23,8 @@ export interface GatewayModalParams {
   email: string;
   /** User's full name */
   name?: string;
+  /** User's phone number (optional — used by ALATPay) */
+  phone?: string;
   /** Public key sourced from the backend gateway object (gateway.public_key) */
   publicKey: string;
   /** Currency code — almost always NGN */
@@ -35,7 +37,7 @@ export interface GatewayModalParams {
 }
 
 export type GatewayResult =
-  | { status: "success"; reference: string }
+  | { status: "success"; reference: string; gatewayReference?: string }
   | { status: "cancelled" }
   | { status: "error"; message: string };
 
@@ -164,6 +166,64 @@ async function openMonnify(params: GatewayModalParams): Promise<GatewayResult> {
   });
 }
 
+async function openAlatpay(params: GatewayModalParams): Promise<GatewayResult> {
+  await loadScript("https://web.alatpay.ng/js/alatpay.js", "alatpay-js");
+  
+  const Alatpay = (window as any).Alatpay;
+  if (!Alatpay) throw new Error("ALATPay SDK failed to initialise.");
+
+  const [firstName, ...rest] = (params.name ?? params.email).split(" ");
+  const lastName = rest.join(" ") || firstName;
+
+  return new Promise<GatewayResult>((resolve) => {
+    let resolved = false;
+
+    const popup = Alatpay.setup({
+      apiKey: params.publicKey,
+      businessId: params.sdkConfig?.business_id ?? "",
+      email: params.email,
+      phone: params.phone ?? "",
+      firstName: firstName || "User",
+      lastName: lastName || "Name",
+      amount: params.amount,
+      currency: params.currency ?? "NGN",
+      // NOTE: the official ALATPay widget key is `metaData` (capital D), not
+      // `metadata`. Tie our reference to the transaction so it echoes back for
+      // reconciliation.
+      metaData: { orderId: params.reference },
+      onTransaction: function (response: any) {
+        if (resolved) return;
+        resolved = true;
+        // ALATPay generates its own transaction id — capture it so the backend
+        // verifies against the id ALATPay actually knows (not our reference).
+        const gatewayReference =
+          response?.data?.transactionId ??
+          response?.data?.Id ??
+          response?.data?.id ??
+          response?.transactionId ??
+          undefined;
+        const ok =
+          response?.status === true ||
+          String(response?.status ?? "").toLowerCase() === "success" ||
+          String(response?.data?.status ?? "").toLowerCase() === "completed";
+        if (ok) {
+          resolve({ status: "success", reference: params.reference, gatewayReference });
+        } else {
+          resolve({ status: "cancelled" });
+        }
+      },
+      onClose: function () {
+        if (!resolved) {
+          resolved = true;
+          resolve({ status: "cancelled" });
+        }
+      },
+    });
+
+    popup.show();
+  });
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -187,6 +247,8 @@ export async function openGatewayModal(
         return await openFlutterwave(params);
       case "monnify":
         return await openMonnify(params);
+      case "alatpay":
+        return await openAlatpay(params);
       default:
         // Unknown gateway — redirect if we have a URL.
         if (params.paymentUrl) {

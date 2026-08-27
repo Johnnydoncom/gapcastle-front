@@ -9,9 +9,9 @@ export async function proxy(req: NextRequest) {
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
   const isProtectedRoute = pathname.startsWith("/account");
 
-  if (isAuthRoute && token) {
-    return NextResponse.redirect(new URL("/account", req.url));
-  }
+  // if (isAuthRoute && token) {
+  //   return NextResponse.redirect(new URL("/account", req.url));
+  // }
 
   if (isProtectedRoute && !token) {
     return NextResponse.redirect(new URL("/login", req.url));

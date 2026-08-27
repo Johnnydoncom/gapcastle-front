@@ -175,16 +175,21 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
       if (!token) throw new Error("Session expired. Please log in again.");
 
       // ── Step 1: create the transaction on the backend ──────────────────────
-      // For services that don't collect an identifier field (e.g. pin, education),
-      // fall back to the logged-in user's phone number as the customer value.
+      // Some services don't collect an identifier (e.g. education/WAEC — the
+      // Ringo WAB payload has no customer field). The backend still requires a
+      // non-empty `customer` for its own records, so fall back to the user's
+      // phone, then email (always present), so the purchase never fails
+      // validation on an empty customer.
       const userPhone = (session?.user as any)?.phone ?? "";
       const payload: any = {
         bill_service_slug: groupSlug,
         bill_provider_id: formValues.providerId,
         bill_product_id: formValues.planId || null,
-        customer: formValues.identifier || userPhone,
+        customer: formValues.identifier || formValues.phone || userPhone || (session?.user as any)?.email || "N/A",
         amount: Number(formValues.amount),
-        metadata: { ...formValues },
+        // Forward the verified customer name (from meter/smartcard lookup) so
+        // providers that require it on purchase (e.g. Ringo DSTV/GOTV) get it.
+        metadata: { ...formValues, customer_name: verifiedData?.customer_name ?? verifiedData?.name },
         payment_gateway_id: selectedGateway?.slug === 'wallet' ? null : selectedGatewayId,
       };
 
@@ -243,6 +248,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         amount: Number(formValues.amount),
         email: userEmail,
         name: (session?.user as any)?.name ?? undefined,
+        phone: (session?.user as any)?.phone ?? undefined,
         publicKey: selectedGateway!.public_key ?? "",
         sdkConfig: selectedGateway!.sdk_config ?? {},
         currency: "NGN",
@@ -264,6 +270,9 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
 
       // ── Step 4: verify payment with backend ───────────────────────────────
       setPaymentStatusLabel("Verifying payment…");
+      // Gateways that mint their own transaction id (ALATPay) return it here so
+      // the backend can verify against the id the gateway actually knows.
+      const gatewayReference = gatewayResult.status === "success" ? gatewayResult.gatewayReference : undefined;
       const verifyRes = await fetch(`${API_URL}/transactions/verify`, {
         method: "POST",
         headers: {
@@ -271,7 +280,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
           "Content-Type": "application/json",
           "Accept": "application/json",
         },
-        body: JSON.stringify({ reference }),
+        body: JSON.stringify({ reference, gateway_reference: gatewayReference }),
       });
       const verifyData = await verifyRes.json();
       const verifiedStatus = verifyData?.data?.status ?? "";
@@ -318,9 +327,12 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
     const DeliveryIcon = deliveryIcons[deliveryInfo.icon];
     const formattedToken = tokenValue ? formatTokenDisplay(tokenValue, serviceGroup) : null;
 
+    const isPinArray = Array.isArray(tokenValue);
+
     const copyToken = async () => {
       if (!tokenValue) return;
-      await navigator.clipboard.writeText(tokenValue);
+      const text = isPinArray ? (tokenValue as string[]).join("\n") : (tokenValue as string);
+      await navigator.clipboard.writeText(text);
       setTokenCopied(true);
       setTimeout(() => setTokenCopied(false), 2500);
     };
@@ -419,10 +431,25 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                       </p>
                     </div>
 
-                    {/* Token / PIN value */}
-                    <p className={`text-base font-mono font-black tracking-[0.1em] leading-relaxed ${colorClasses.text} ${colorClasses.textDark} select-all break-all`}>
-                      {formattedToken}
-                    </p>
+                    {/* Token / PIN value — single string or multiple PINs (e.g. WAEC) */}
+                    {isPinArray ? (
+                      <div className="space-y-2 text-left">
+                        {(tokenValue as string[]).map((pin, i) => (
+                          <div key={i} className="rounded-lg bg-white/50 dark:bg-black/20 px-3 py-2">
+                            <p className={`text-[10px] font-semibold uppercase tracking-widest mb-1 ${colorClasses.textMuted}`}>
+                              PIN {i + 1}
+                            </p>
+                            <p className={`text-sm font-mono font-black tracking-[0.08em] ${colorClasses.text} ${colorClasses.textDark} select-all break-all`}>
+                              {pin}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className={`text-base font-mono font-black tracking-[0.1em] leading-relaxed ${colorClasses.text} ${colorClasses.textDark} select-all break-all`}>
+                        {formattedToken}
+                      </p>
+                    )}
 
                     {/* Hint text */}
                     <p className={`mt-2 text-[10px] ${colorClasses.textMuted} font-medium`}>
@@ -626,6 +653,16 @@ function buildSummaryItems(
   // Verified customer name (from meter/smartcard lookup)
   if (verifiedData?.customer_name) {
     items.push({ label: "Customer Name", value: verifiedData.customer_name });
+  }
+
+  // Meter type (electricity)
+  if (formValues.meterType) {
+    items.push({ label: "Meter Type", value: String(formValues.meterType).toUpperCase() });
+  }
+
+  // Verified address (electricity, cable)
+  if (verifiedData?.address) {
+    items.push({ label: "Address", value: verifiedData.address });
   }
 
   // Plan

@@ -11,8 +11,8 @@ export const amountSchema = z
 
 export const meterNumberSchema = z
   .string()
-  .min(10, "Meter number is too short")
-  .max(13, "Meter number is too long");
+  .min(6, "Meter number is too short")
+  .max(15, "Meter number is too long");
 
 export const smartcardNumberSchema = z
   .string()

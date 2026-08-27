@@ -30,12 +30,6 @@ const displayMap: Record<string, DeliveryDisplayInfo> = {
     color: "emerald",
     hint: "Use this PIN on the exam portal",
   },
-  pin: {
-    label: "Result PIN",
-    icon: "GraduationCap",
-    color: "emerald",
-    hint: "Use this PIN to check your result",
-  },
   cable: {
     label: "Subscription Code",
     icon: "Tv",
@@ -96,13 +90,20 @@ export function getDeliveryDisplayInfo(serviceGroup: string | null | undefined):
 }
 
 /**
- * Format a token string for display.
+ * Format a token value for display.
  *
- * - Electricity tokens → grouped into 4-digit chunks (e.g. "4713 3458 3966 9352 2090")
+ * Accepts either a single string or an array of strings (e.g. multiple WAEC PINs
+ * returned by Ringo). Returns a single display string:
+ * - Arrays  → joined with newline (each PIN on its own line)
+ * - Electricity / utility tokens → grouped into 4-digit chunks
  * - Everything else → returned as-is
  */
-export function formatTokenDisplay(token: string, serviceGroup: string | null | undefined): string {
-  if (!token) return "";
+export function formatTokenDisplay(token: string | string[], serviceGroup: string | null | undefined): string {
+  if (!token || (Array.isArray(token) && token.length === 0)) return "";
+
+  if (Array.isArray(token)) {
+    return token.join("\n");
+  }
 
   const cleaned = token.replace(/\s+/g, "");
 

@@ -71,38 +71,49 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
   cable: {
     slug: "cable",
     title: "Cable TV Subscription",
+    // Covers DSTV/GOTV/Startimes (smartcard + bouquet) and Showmax (streaming:
+    // delivered to a phone, pick a package). `providerSlug` is injected by
+    // DynamicFormFields so the fields/schema can branch on Showmax.
     schema: z.object({
       providerId: z.number({ message: "Please select a provider" }),
-      identifier: smartcardNumberSchema,
-      transactionType: z.enum(["renew", "change"], { message: "Select transaction type" }),
+      providerSlug: z.string().optional(),
+      identifier: z.string().optional(),   // smartcard (TV only)
+      phone: z.string().optional(),        // delivery phone (Showmax only)
       planId: z.number().optional(),
+      period: z.union([z.number(), z.string()]).optional(),
       amount: z.union([z.number(), z.string()]).optional(),
       planName: z.string().optional(),
       variationCode: z.string().optional(),
     }).superRefine((data, ctx) => {
-      const amt = Number(data.amount);
-      if (data.transactionType === "renew" && (!amt || amt < 50)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Please click 'Verify' to fetch your renewal amount.",
-          path: ["identifier"],
-        });
+      // Showmax: package + delivery phone, no smartcard/bouquet.
+      if (data.providerSlug === "showmax") {
+        if (data.planId == null) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a Showmax package.", path: ["planId"] });
+        }
+        if (!data.phone || data.phone.replace(/\D/g, "").length < 10) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter the phone number for delivery.", path: ["phone"] });
+        }
+        return;
       }
-      if (data.transactionType === "change" && (!amt || amt < 50)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Please select a valid bouquet plan.",
-          path: ["planId"],
-        });
+      // DSTV/GOTV/Startimes: verify smartcard then select a bouquet.
+      if (!data.identifier || data.identifier.length < 4) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter your smartcard number.", path: ["identifier"] });
+      }
+      const amt = Number(data.amount);
+      if (!data.variationCode && (!amt || amt < 50)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please verify your smartcard and select a bouquet.", path: ["identifier"] });
       }
     }),
-    defaultValues: { providerId: undefined, identifier: "", transactionType: "change", amount: "" },
+    defaultValues: { providerId: undefined, identifier: "", phone: "", period: 1, amount: "" },
     fields: [
       { name: "providerId", label: "Cable Provider", type: "provider_grid" },
-      { name: "identifier", label: "Smartcard Number", type: "verify_input", placeholder: "Enter smartcard number" },
-      { name: "transactionType", label: "Transaction Type", type: "radio", options: [{ label: "Change Bouquet", value: "change" }, { label: "Renew Current Bouquet", value: "renew" }] },
-      { name: "planId", label: "Bouquet / Plan", type: "plan_grid", isHidden: (vals) => vals.transactionType === "renew" },
-      { name: "amount", label: "Amount (₦)", type: "number", readonly: true, isHidden: (vals) => vals.transactionType === "renew" },
+      { name: "identifier", label: "Smartcard Number", type: "verify_input", placeholder: "Enter smartcard number", isHidden: (vals) => vals.providerSlug === "showmax" },
+      { name: "phone", label: "Phone Number (for delivery)", type: "phone", placeholder: "08012345678", isHidden: (vals) => vals.providerSlug !== "showmax" },
+      // Showmax uses DB products (static catalogue); DSTV/GOTV/Startimes bouquets
+      // come from the V-TV validation response rendered inline below the verify field.
+      { name: "planId", label: "Bouquet / Package", type: "plan_grid", isHidden: (vals) => vals.providerSlug !== "showmax" },
+      { name: "period", label: "Duration (Months)", type: "number", placeholder: "1", isHidden: (vals) => vals.providerSlug === "showmax" },
+      { name: "amount", label: "Amount (₦)", type: "number", readonly: true, isHidden: (vals) => vals.providerSlug === "showmax" },
     ],
   },
   electricity: {
@@ -112,48 +123,69 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       providerId: z.number({ message: "Please select a provider" }),
       meterType: z.enum(["prepaid", "postpaid"], { message: "Select meter type" }),
       identifier: meterNumberSchema,
+      phone: phoneSchema,
       amount: amountSchema,
     }),
-    defaultValues: { providerId: undefined, meterType: "prepaid", identifier: "", amount: "" },
+    defaultValues: { providerId: undefined, meterType: "prepaid", identifier: "", phone: "", amount: "" },
     fields: [
       { name: "providerId", label: "Distribution Company (Disco)", type: "provider_grid" },
       { name: "meterType", label: "Meter Type", type: "radio", options: [{ label: "Prepaid", value: "prepaid" }, { label: "Postpaid", value: "postpaid" }] },
       { name: "identifier", label: "Meter Number", type: "verify_input", placeholder: "Enter meter number" },
+      { name: "phone", label: "Phone Number (for token & receipt)", type: "phone", placeholder: "08012345678" },
       { name: "amount", label: "Amount (₦)", type: "number", placeholder: "0.00" },
     ],
   },
   internet: {
     slug: "internet",
     title: "Internet Subscription",
+    // Ringo supports three internet purchase shapes:
+    //  - Smile "bundle": pick a data plan (P-Internet)
+    //  - Smile "recharge": top up the account by amount (SRP)
+    //  - Spectranet: buy access PINs by amount + quantity (P-Internet)
+    // `providerSlug` is injected into the form by DynamicFormFields when a
+    // provider is chosen, so the conditional fields below can branch on it.
     schema: z.object({
       providerId: z.number({ message: "Please select an ISP" }),
-      planId: z.number({ message: "Please select a plan" }),
-      identifier: z.string().min(3, "Account ID is required"),
-      amount: amountSchema,
+      providerSlug: z.string().optional(),
+      internet_type: z.enum(["bundle", "recharge"]).optional(),
+      identifier: z.string().optional(),
+      planId: z.number().optional(),
+      quantity: z.number().min(1).max(20).optional(),
+      amount: z.union([z.number(), z.string()]).optional(),
       planName: z.string().optional(),
       variationCode: z.string().optional(),
-      accountId: z.string().optional(), // Used by Smile
+      allowance: z.string().optional(),
+      validity: z.string().optional(),
+      accountId: z.string().optional(),
+    }).superRefine((data, ctx) => {
+      const isSpectranet = data.providerSlug === "spectranet";
+      const isSmile = data.providerSlug === "smile";
+      // Spectranet buys PINs by amount + quantity — no account needed.
+      if (!isSpectranet && (data.identifier ?? "").length < 3) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Account ID is required.", path: ["identifier"] });
+      }
+      if (isSpectranet) {
+        const amt = Number(data.amount);
+        if (!amt || amt < 50) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid amount (min ₦50).", path: ["amount"] });
+        }
+      } else if (isSmile && data.planId == null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please verify your account and select a plan.", path: ["planId"] });
+      } else if (!isSmile && !isSpectranet && data.planId == null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a data plan.", path: ["planId"] });
+      }
     }),
-    defaultValues: { providerId: undefined, planId: undefined, identifier: "", amount: "", accountId: "" },
+    defaultValues: { providerId: undefined, internet_type: "bundle", planId: undefined, identifier: "", quantity: 1, amount: "", accountId: "" },
     fields: [
       { name: "providerId", label: "ISP Provider", type: "provider_grid" },
-      { name: "identifier", label: "Smile Email / Account ID", type: "verify_input", placeholder: "Enter Email or Account ID" },
-      { name: "planId", label: "Data Plan", type: "plan_grid" },
-    ],
-  },
-  pin: {
-    slug: "pin",
-    title: "PIN Services",
-    schema: z.object({
-      providerId: z.number({ message: "Please select an Exam Type" }),
-      quantity: z.number().min(1).max(20),
-      amount: amountSchema,
-      planId: z.number().optional(),
-    }),
-    defaultValues: { providerId: undefined, quantity: 1, amount: "" },
-    fields: [
-      { name: "providerId", label: "Exam Type", type: "provider_grid" },
-      { name: "quantity", label: "Quantity", type: "number" },
+      { name: "internet_type", label: "Purchase Type", type: "radio", options: [{ label: "Data Bundle", value: "bundle" }, { label: "Recharge", value: "recharge" }], isHidden: (vals) => vals.providerSlug !== "smile" },
+      { name: "identifier", label: "Smile Email / Account ID", type: "verify_input", placeholder: "Enter Email or Account ID", isHidden: (vals) => vals.providerSlug === "spectranet" },
+      // plan_grid: shown for Smile (both bundle + recharge — plans from SRV/V-Internet
+      // validation replace DB products) and for other non-Spectranet providers.
+      { name: "planId", label: "Data Plan", type: "plan_grid", isHidden: (vals) => vals.providerSlug === "spectranet" },
+      { name: "quantity", label: "Number of PINs", type: "number", isHidden: (vals) => vals.providerSlug !== "spectranet" },
+      // amount: only shown for Spectranet (free-form). Smile fills amount from plan selection.
+      { name: "amount", label: "Amount (₦)", type: "number", placeholder: "0.00", isHidden: (vals) => vals.providerSlug !== "spectranet" },
     ],
   },
   education: {

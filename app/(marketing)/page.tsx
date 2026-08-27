@@ -5,7 +5,7 @@ import {
   Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious,
 } from "@/components/ui/carousel";
 import {
-  Smartphone, Wifi, Tv, Zap, Globe, Ticket, GraduationCap, Shield,
+  Smartphone, Wifi, Tv, Zap, Globe, GraduationCap, Shield,
   ArrowRight, Gift, Lock, Zap as Bolt, Check, ShieldCheck, CreditCard,
   Clock, Sparkles, BadgeCheck, Banknote, Receipt, Headphones, Star, TrendingUp,
   ArrowUpRight,
@@ -20,7 +20,7 @@ const services = [
   { icon: Tv, label: "Cable TV", desc: "DSTV, GOTV, Startimes", tone: "from-pink-500/10 to-pink-500/0 text-pink-600" },
   { icon: Zap, label: "Electricity", desc: "All discos", tone: "from-amber-500/10 to-amber-500/0 text-amber-600" },
   { icon: Globe, label: "Internet", desc: "Spectranet, Smile", tone: "from-cyan-500/10 to-cyan-500/0 text-cyan-600" },
-  { icon: Ticket, label: "Recharge PINs", desc: "Bulk vouchers", tone: "from-orange-500/10 to-orange-500/0 text-orange-600" },
+  { icon: Receipt, label: "Collections", desc: "Agency & levies", tone: "from-orange-500/10 to-orange-500/0 text-orange-600" },
   { icon: GraduationCap, label: "Education", desc: "WAEC, JAMB, NECO", tone: "from-emerald-500/10 to-emerald-500/0 text-emerald-600" },
   { icon: Shield, label: "Insurance", desc: "Pay your premiums", tone: "from-indigo-500/10 to-indigo-500/0 text-indigo-600" },
 ];
