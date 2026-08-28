@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { AccountShell } from "@/components/AccountShell";
 
-// Per-request: the session is read from cookies on every navigation.
 export const dynamic = "force-dynamic";
 
 /**
