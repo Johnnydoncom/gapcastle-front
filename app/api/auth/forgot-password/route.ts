@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
+// Force HTTPS for the live server. Using http:// causes a 301/302 redirect which
+// Node.js follows but downgrades POST → GET, triggering a 405 on Laravel.
+const rawApiUrl = process.env.API_INTERNAL_URL
+  || process.env.NEXT_PUBLIC_API_URL
+  || "http://gapcastle.test/api/v1";
+const API_URL = rawApiUrl.replace(/^http:\/\/bills\.gapcastle\.com/, "https://bills.gapcastle.com");
 
 export async function POST(req: NextRequest) {
   try {
