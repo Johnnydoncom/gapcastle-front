@@ -9,8 +9,6 @@ import { Logo } from "@/components/Logo";
 import { toast } from "sonner";
 import { CheckCircle2, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
-
 function ResetPasswordForm() {
   const router = useRouter();
   const params = useSearchParams();
@@ -55,7 +53,7 @@ function ResetPasswordForm() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/auth/reset-password`, {
+      const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify({
