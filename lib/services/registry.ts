@@ -150,6 +150,8 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       internet_type: z.enum(["bundle", "recharge"]).optional(),
       identifier: z.string().optional(),
       planId: z.number().optional(),
+      // Spectranet delivers the PIN by SMS; VTPass sends it as billersCode.
+      phone: z.string().optional(),
       quantity: z.number().min(1).max(20).optional(),
       amount: z.union([z.number(), z.string()]).optional(),
       planName: z.string().optional(),
@@ -160,14 +162,18 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
     }).superRefine((data, ctx) => {
       const isSpectranet = data.providerSlug === "spectranet";
       const isSmile = data.providerSlug === "smile";
-      // Spectranet buys PINs by amount + quantity — no account needed.
+      // Spectranet sells fixed PIN denominations to a phone number, not to an
+      // account, so it needs no identifier.
       if (!isSpectranet && (data.identifier ?? "").length < 3) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Account ID is required.", path: ["identifier"] });
       }
       if (isSpectranet) {
-        const amt = Number(data.amount);
-        if (!amt || amt < 50) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid amount (min ₦50).", path: ["amount"] });
+        // The denomination carries the price — VTPass ignores any amount sent.
+        if (data.planId == null) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a PIN denomination.", path: ["planId"] });
+        }
+        if (!data.phone || data.phone.replace(/\D/g, "").length < 10) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter the phone number for PIN delivery.", path: ["phone"] });
         }
       } else if (isSmile && data.planId == null) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please verify your account and select a plan.", path: ["planId"] });
@@ -175,17 +181,20 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a data plan.", path: ["planId"] });
       }
     }),
-    defaultValues: { providerId: undefined, internet_type: "bundle", planId: undefined, identifier: "", quantity: 1, amount: "", accountId: "" },
+    defaultValues: { providerId: undefined, internet_type: "bundle", planId: undefined, identifier: "", phone: "", quantity: 1, amount: "", accountId: "" },
     fields: [
       { name: "providerId", label: "ISP Provider", type: "provider_grid" },
       { name: "internet_type", label: "Purchase Type", type: "radio", options: [{ label: "Data Bundle", value: "bundle" }, { label: "Recharge", value: "recharge" }], isHidden: (vals) => vals.providerSlug !== "smile" },
       { name: "identifier", label: "Smile Email / Account ID", type: "verify_input", placeholder: "Enter Email or Account ID", isHidden: (vals) => vals.providerSlug === "spectranet" },
-      // plan_grid: shown for Smile (both bundle + recharge — plans from SRV/V-Internet
-      // validation replace DB products) and for other non-Spectranet providers.
-      { name: "planId", label: "Data Plan", type: "plan_grid", isHidden: (vals) => vals.providerSlug === "spectranet" },
+      // plan_grid serves every provider: Smile plans come from SRV/V-Internet
+      // validation, Spectranet's fixed denominations from the variation codes
+      // endpoint, and the rest from stored products.
+      { name: "planId", label: "Data Plan", type: "plan_grid" },
+      { name: "phone", label: "Phone Number (for PIN delivery)", type: "phone", placeholder: "08012345678", isHidden: (vals) => vals.providerSlug !== "spectranet" },
       { name: "quantity", label: "Number of PINs", type: "number", isHidden: (vals) => vals.providerSlug !== "spectranet" },
-      // amount: only shown for Spectranet (free-form). Smile fills amount from plan selection.
-      { name: "amount", label: "Amount (₦)", type: "number", placeholder: "0.00", isHidden: (vals) => vals.providerSlug !== "spectranet" },
+      // amount is derived from the chosen denomination × quantity; VTPass
+      // ignores whatever amount is sent, so it must never be free-form.
+      { name: "amount", label: "Amount (₦)", type: "number", readonly: true, isHidden: (vals) => vals.providerSlug !== "spectranet" },
     ],
   },
   education: {

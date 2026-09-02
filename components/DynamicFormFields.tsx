@@ -62,15 +62,23 @@ export function DynamicFormFields({
     setValue("amount", Number(plan.amount) * months);
   }, [watchedPeriod, watchedVariationCode]);
 
-  // Recalculate amount when quantity changes for education (WAV live price × qty).
+  // Providers whose plan list is fetched by validation with no identifier:
+  // education (WAEC/JAMB) and Spectranet (fixed PIN denominations).
+  const fetchesPlansOnSelect = (slug?: string) =>
+    category === "education" || (category === "internet" && slug === "spectranet");
+
+  // Recalculate amount when quantity changes for the PIN-based flows, where
+  // the total is the chosen denomination × number of PINs.
   const watchedQuantity = watch("quantity");
   useEffect(() => {
-    if (category !== "education" || !wavPlans.length) return;
-    const livePrice = wavPlans[0]?.amount;
+    if (!wavPlans.length) return;
+    if (category !== "education" && values.providerSlug !== "spectranet") return;
+    const selected = wavPlans.find((p: any) => p.id === values.planId) ?? wavPlans[0];
+    const livePrice = selected?.amount;
     if (!livePrice) return;
     const qty = Math.max(1, Number(watchedQuantity) || 1);
     setValue("amount", Number(livePrice) * qty);
-  }, [watchedQuantity, wavPlans]);
+  }, [watchedQuantity, wavPlans, values.planId]);
 
   // Fetch the live plan list for the selected education provider and populate
   // wavPlans + form fields. Triggered from both the useEffect and the
@@ -119,9 +127,10 @@ export function DynamicFormFields({
   // session hydrates — the token is needed by fetchApi).
   const watchedProviderId = watch("providerId");
   useEffect(() => {
-    if (category !== "education" || !watchedProviderId || !providers.length || !hasToken) return;
+    if (!watchedProviderId || !providers.length || !hasToken) return;
     const selectedProvider = providers.find((p: any) => p.id === watchedProviderId);
     if (!selectedProvider) return;
+    if (!fetchesPlansOnSelect(selectedProvider.slug ?? selectedProvider.code)) return;
     runEducationPlanFetch(selectedProvider);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedProviderId, providers.length, hasToken]);
@@ -227,9 +236,9 @@ export function DynamicFormFields({
                         setValue("planId", undefined);
                         const selected = providers.find((p) => p.id === val);
                         setValue("providerSlug", selected?.slug ?? "");
-                        // Education: immediately fire WAV so the plan_grid
+                        // Fire the plan fetch immediately so the plan_grid
                         // updates without waiting for the watchedProviderId effect.
-                        if (category === "education" && selected) {
+                        if (selected && fetchesPlansOnSelect(selected.slug ?? (selected as any).code)) {
                           runEducationPlanFetch(selected);
                         }
                       }}
@@ -242,13 +251,17 @@ export function DynamicFormFields({
                   if (category === "credit_check" && values.requestType) {
                     visibleProducts = products.filter(p => p.metadata?.request_type === values.requestType);
                   }
-                  // Education: replace DB products with the live-priced plans
-                  // returned by validation. wavPlans is local state set directly
-                  // from that response — independent of verifiedData prop timing.
-                  if (category === "education" && wavPlans.length > 0) {
+                  // Education and Spectranet: replace DB products with the
+                  // live-priced plans returned by validation. wavPlans is local
+                  // state set directly from that response — independent of
+                  // verifiedData prop timing.
+                  if (wavPlans.length > 0 && fetchesPlansOnSelect(values.providerSlug)) {
                     visibleProducts = wavPlans.map((p: any) => ({
                       ...p,
-                      name: p.name || products[0]?.name || "",
+                      // Spectranet denominations can come back unnamed; label
+                      // them by price so the dropdown is never blank.
+                      name: p.name || products[0]?.name
+                        || (p.amount ? `₦${Number(p.amount).toLocaleString()}` : ""),
                       variation_code: p.variation_code || "",
                     }));
                   }
@@ -268,7 +281,9 @@ export function DynamicFormFields({
                     const selectedPlan = visibleProducts.find(p => p.id === numVal);
                     if (selectedPlan) {
                       const baseAmt = Number(selectedPlan.amount);
-                      const qty = category === "education" ? Math.max(1, Number(values.quantity) || 1) : 1;
+                      // PIN-based flows bill per PIN, so multiply by quantity.
+                      const perPin = category === "education" || values.providerSlug === "spectranet";
+                      const qty = perPin ? Math.max(1, Number(values.quantity) || 1) : 1;
                       setValue("amount", baseAmt * qty);
                       setValue("planName", selectedPlan.name);
                       setValue("variationCode", selectedPlan.variation_code || "");
