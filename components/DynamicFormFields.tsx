@@ -72,10 +72,10 @@ export function DynamicFormFields({
     setValue("amount", Number(livePrice) * qty);
   }, [watchedQuantity, wavPlans]);
 
-  // Shared function: call Ringo WAV and populate wavPlans + form fields.
-  // Extracted so it can be triggered from both the useEffect and the
+  // Fetch the live plan list for the selected education provider and populate
+  // wavPlans + form fields. Triggered from both the useEffect and the
   // provider_grid onChange handler without duplicating the logic.
-  const runWavValidation = (selectedProvider: any) => {
+  const runEducationPlanFetch = (selectedProvider: any) => {
     setVerifying(true);
     setWavPlans([]);
     setVerifiedData(null);
@@ -83,20 +83,24 @@ export function DynamicFormFields({
     verify({
       service: category,
       provider_code: selectedProvider.slug || selectedProvider.code,
-      billers_code: "WAEC",
+      // No identifier exists at provider-selection time. WAEC never needs one;
+      // JAMB's profile ID is verified separately once the user types it.
+      // Sending a placeholder made the backend verify it as a real biller code,
+      // which failed for every provider that isn't WAEC.
+      billers_code: "",
     }).then(res => {
       setVerifiedData(res);
       if (res?.is_valid !== false && res?.plans?.length > 0) {
         setWavPlans(res.plans);
-        const livePrice = Number(res.plans[0].amount);
+        const first = res.plans[0];
         const qty = Math.max(1, Number(watch("quantity")) || 1);
-        setValue("planId", res.plans[0].id);
-        setValue("variationCode", "WAEC");
-        setValue("planName", products[0]?.name || selectedProvider.name || "WAEC Result Checker PIN");
-        setValue("amount", livePrice * qty);
+        setValue("planId", first.id);
+        setValue("variationCode", first.variation_code || "");
+        setValue("planName", first.name || selectedProvider.name || "");
+        setValue("amount", Number(first.amount) * qty);
       }
     }).catch((err: any) => {
-      toast.error(err?.message || "Could not fetch WAEC price. Please try again.");
+      toast.error(err?.message || "Could not fetch plans. Please try again.");
     }).finally(() => setVerifying(false));
   };
 
@@ -118,7 +122,7 @@ export function DynamicFormFields({
     if (category !== "education" || !watchedProviderId || !providers.length || !hasToken) return;
     const selectedProvider = providers.find((p: any) => p.id === watchedProviderId);
     if (!selectedProvider) return;
-    runWavValidation(selectedProvider);
+    runEducationPlanFetch(selectedProvider);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedProviderId, providers.length, hasToken]);
 
@@ -226,7 +230,7 @@ export function DynamicFormFields({
                         // Education: immediately fire WAV so the plan_grid
                         // updates without waiting for the watchedProviderId effect.
                         if (category === "education" && selected) {
-                          runWavValidation(selected);
+                          runEducationPlanFetch(selected);
                         }
                       }}
                     />
@@ -238,14 +242,14 @@ export function DynamicFormFields({
                   if (category === "credit_check" && values.requestType) {
                     visibleProducts = products.filter(p => p.metadata?.request_type === values.requestType);
                   }
-                  // Education: replace DB products with WAV live-priced plan.
-                  // wavPlans is local state set directly from the WAV response —
-                  // independent of verifiedData prop timing.
+                  // Education: replace DB products with the live-priced plans
+                  // returned by validation. wavPlans is local state set directly
+                  // from that response — independent of verifiedData prop timing.
                   if (category === "education" && wavPlans.length > 0) {
                     visibleProducts = wavPlans.map((p: any) => ({
                       ...p,
-                      name: p.name || products[0]?.name || "WAEC Result Checker PIN",
-                      variation_code: p.variation_code || "WAEC",
+                      name: p.name || products[0]?.name || "",
+                      variation_code: p.variation_code || "",
                     }));
                   }
                   // Internet (Smile): replace DB products with live plans returned

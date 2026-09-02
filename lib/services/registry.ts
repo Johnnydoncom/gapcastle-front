@@ -193,14 +193,28 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
     title: "Education Services",
     schema: z.object({
       providerId: z.number({ message: "Please select an Institution" }),
+      providerSlug: z.string().optional(),
       planId: z.number({ message: "Please select a Product" }),
+      // JAMB vends against a candidate's profile ID; WAEC PINs need none.
+      identifier: z.string().optional(),
       quantity: z.number().min(1).max(20),
       amount: amountSchema,
+      planName: z.string().optional(),
+      variationCode: z.string().optional(),
+    }).superRefine((data, ctx) => {
+      if (data.providerSlug === "jamb" && (data.identifier ?? "").trim().length < 6) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Enter and verify your JAMB Profile ID.",
+          path: ["identifier"],
+        });
+      }
     }),
-    defaultValues: { providerId: undefined, planId: undefined, quantity: 1, amount: "" },
+    defaultValues: { providerId: undefined, providerSlug: "", planId: undefined, identifier: "", quantity: 1, amount: "" },
     fields: [
       { name: "providerId", label: "Institution / Exam Body", type: "provider_grid" },
       { name: "planId", label: "Product / Variation", type: "plan_grid" },
+      { name: "identifier", label: "JAMB Profile ID", type: "verify_input", placeholder: "Enter your JAMB profile ID", isHidden: (vals) => vals.providerSlug !== "jamb" },
       { name: "quantity", label: "Quantity", type: "number" },
     ],
   },
