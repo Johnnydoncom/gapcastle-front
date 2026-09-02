@@ -65,6 +65,23 @@ export function DynamicFormFields({
     setValue("amount", Number(plan.amount) * months);
   }, [watchedPeriod, watchedVariationCode]);
 
+  // Cable renew/change switch. A renewal bills the amount merchant-verify
+  // returned and carries no bouquet code; a change starts from a fresh
+  // selection, so the stale amount must not survive the switch.
+  const watchedTransactionType = watch("transactionType");
+  useEffect(() => {
+    if (category !== "cable") return;
+    if (watchedTransactionType === "renew") {
+      setValue("variationCode", "");
+      setValue("planName", "");
+      const renewal = verifiedData?.metadata?.Renewal_Amount ?? verifiedData?.minimum_amount;
+      if (renewal) setValue("amount", Number(renewal));
+    } else {
+      setValue("amount", "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedTransactionType]);
+
   // Providers whose plan list is fetched by validation with no identifier:
   // education (WAEC/JAMB), Spectranet (PIN denominations) and Showmax
   // (subscription packages). None of them expose a merchant-verify endpoint.
@@ -169,7 +186,10 @@ export function DynamicFormFields({
         else if (res.metadata?.minimumPayable) setValue("amount", Number(res.metadata.minimumPayable));
         else if (res.amount) setValue("amount", Number(res.amount));
         else if (res.metadata?.Renewal_Amount) setValue("amount", Number(res.metadata.Renewal_Amount));
-        else if (category === "cable" && values.transactionType === "renew") setValue("amount", 5000); // Sandbox fallback
+        // No arbitrary fallback for a cable renewal: inventing an amount would
+        // charge the wrong sum against a live key. If verification returns no
+        // renewal amount the schema blocks submission and asks the user to
+        // verify again, or to change bouquet instead.
 
         // Auto-select Smile AccountId if present
         const accList = res.metadata?.AccountList?.Account;
@@ -358,8 +378,11 @@ export function DynamicFormFields({
                             {verifiedData.metadata?.Due_Date && <p className="text-muted-foreground text-xs mt-1">Due Date: {new Date(verifiedData.metadata.Due_Date).toLocaleDateString()}</p>}
                             {verifiedData.metadata?.Customer_Type && <p className="text-muted-foreground text-xs mt-1">Type: {verifiedData.metadata.Customer_Type}</p>}
                             
-                            {/* Cable TV bouquet selector — populated from Ringo V-TV response */}
-                            {category === "cable" && verifiedData.plans?.length > 0 && (
+                            {/* Cable bouquet selector — populated from Ringo's V-TV
+                                response or the VTPass variations attached to
+                                merchant-verify. Hidden on a renewal, which bills the
+                                verified amount and must carry no bouquet code. */}
+                            {category === "cable" && verifiedData.plans?.length > 0 && values.transactionType !== "renew" && (
                               <div className="mt-4 space-y-2 border-t pt-3">
                                 <Label className="text-xs font-semibold">Select Bouquet / Package</Label>
                                 <Select

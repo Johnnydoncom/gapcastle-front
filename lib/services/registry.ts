@@ -84,6 +84,8 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       amount: z.union([z.number(), z.string()]).optional(),
       planName: z.string().optional(),
       variationCode: z.string().optional(),
+      // DSTV/GOTV only. Startimes always bills a bouquet code and rejects it.
+      transactionType: z.enum(["change", "renew"]).optional(),
     }).superRefine((data, ctx) => {
       // Showmax: package + delivery phone, no smartcard/bouquet.
       if (data.providerSlug === "showmax") {
@@ -100,13 +102,24 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter your smartcard number.", path: ["identifier"] });
       }
       const amt = Number(data.amount);
+      // A renewal bills the amount merchant-verify returned, so it needs no
+      // bouquet — only that verification has produced an amount.
+      if (data.transactionType === "renew") {
+        if (!amt || amt < 50) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Verify your smartcard to load the renewal amount.", path: ["identifier"] });
+        }
+        return;
+      }
       if (!data.variationCode && (!amt || amt < 50)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please verify your smartcard and select a bouquet.", path: ["identifier"] });
       }
     }),
-    defaultValues: { providerId: undefined, identifier: "", phone: "", period: 1, amount: "" },
+    defaultValues: { providerId: undefined, identifier: "", phone: "", period: 1, amount: "", transactionType: "change" },
     fields: [
       { name: "providerId", label: "Cable Provider", type: "provider_grid" },
+      // Only DSTV and GOTV support renewals; Startimes and Showmax always bill
+      // a selected package.
+      { name: "transactionType", label: "Subscription Type", type: "radio", options: [{ label: "Change bouquet", value: "change" }, { label: "Renew current plan", value: "renew" }], isHidden: (vals) => !["dstv", "gotv"].includes(vals.providerSlug) },
       { name: "identifier", label: "Smartcard Number", type: "verify_input", placeholder: "Enter smartcard number", isHidden: (vals) => vals.providerSlug === "showmax" },
       { name: "phone", label: "Phone Number (for delivery)", type: "phone", placeholder: "08012345678", isHidden: (vals) => vals.providerSlug !== "showmax" },
       // Showmax uses DB products (static catalogue); DSTV/GOTV/Startimes bouquets
