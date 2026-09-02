@@ -197,6 +197,8 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       planId: z.number({ message: "Please select a Product" }),
       // JAMB vends against a candidate's profile ID; WAEC PINs need none.
       identifier: z.string().optional(),
+      // The PIN is delivered by SMS, so a real number is required.
+      phone: phoneSchema,
       quantity: z.number().min(1).max(20),
       amount: amountSchema,
       planName: z.string().optional(),
@@ -210,11 +212,12 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
         });
       }
     }),
-    defaultValues: { providerId: undefined, providerSlug: "", planId: undefined, identifier: "", quantity: 1, amount: "" },
+    defaultValues: { providerId: undefined, providerSlug: "", planId: undefined, identifier: "", phone: "", quantity: 1, amount: "" },
     fields: [
       { name: "providerId", label: "Institution / Exam Body", type: "provider_grid" },
       { name: "planId", label: "Product / Variation", type: "plan_grid" },
       { name: "identifier", label: "JAMB Profile ID", type: "verify_input", placeholder: "Enter your JAMB profile ID", isHidden: (vals) => vals.providerSlug !== "jamb" },
+      { name: "phone", label: "Phone Number (for PIN delivery)", type: "phone", placeholder: "08012345678" },
       { name: "quantity", label: "Quantity", type: "number" },
     ],
   },
