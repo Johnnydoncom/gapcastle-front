@@ -56,6 +56,9 @@ export function DynamicFormFields({
   const watchedVariationCode = watch("variationCode");
   useEffect(() => {
     if (category !== "cable" || !verifiedData?.plans?.length) return;
+    // Showmax packages already price in their own duration (full_3 is 3 months),
+    // so the bouquet x months maths must not be applied to them.
+    if (values.providerSlug === "showmax") return;
     const plan = verifiedData.plans.find((p: any) => p.variation_code === watchedVariationCode);
     if (!plan) return;
     const months = Math.max(1, Number(watchedPeriod) || 1);
@@ -63,9 +66,12 @@ export function DynamicFormFields({
   }, [watchedPeriod, watchedVariationCode]);
 
   // Providers whose plan list is fetched by validation with no identifier:
-  // education (WAEC/JAMB) and Spectranet (fixed PIN denominations).
+  // education (WAEC/JAMB), Spectranet (PIN denominations) and Showmax
+  // (subscription packages). None of them expose a merchant-verify endpoint.
   const fetchesPlansOnSelect = (slug?: string) =>
-    category === "education" || (category === "internet" && slug === "spectranet");
+    category === "education"
+    || (category === "internet" && slug === "spectranet")
+    || (category === "cable" && slug === "showmax");
 
   // Recalculate amount when quantity changes for the PIN-based flows, where
   // the total is the chosen denomination × number of PINs.
