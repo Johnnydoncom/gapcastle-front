@@ -122,9 +122,11 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       { name: "transactionType", label: "Subscription Type", type: "radio", options: [{ label: "Change bouquet", value: "change" }, { label: "Renew current plan", value: "renew" }], isHidden: (vals) => !["dstv", "gotv"].includes(vals.providerSlug) },
       { name: "identifier", label: "Smartcard Number", type: "verify_input", placeholder: "Enter smartcard number", isHidden: (vals) => vals.providerSlug === "showmax" },
       { name: "phone", label: "Phone Number (for delivery)", type: "phone", placeholder: "08012345678", isHidden: (vals) => vals.providerSlug !== "showmax" },
-      // Showmax uses DB products (static catalogue); DSTV/GOTV/Startimes bouquets
-      // come from the V-TV validation response rendered inline below the verify field.
-      { name: "planId", label: "Bouquet / Package", type: "plan_grid", isHidden: (vals) => vals.providerSlug !== "showmax" },
+      // Bouquets come from the live list when verification has returned one
+      // (Ringo V-TV, or the VTPass variations attached to merchant-verify) and
+      // from stored products otherwise, so a bouquet can be picked before
+      // verifying. Hidden on a renewal, which bills the verified amount.
+      { name: "planId", label: "Bouquet / Package", type: "plan_grid", isHidden: (vals) => vals.transactionType === "renew" },
       { name: "period", label: "Duration (Months)", type: "number", placeholder: "1", isHidden: (vals) => vals.providerSlug === "showmax" },
       { name: "amount", label: "Amount (₦)", type: "number", readonly: true, isHidden: (vals) => vals.providerSlug === "showmax" },
     ],

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { RadioCardGroup, RadioCard } from "@/components/ui/RadioCardGroup";
-import { formatNaira, detectNetwork } from "@/lib/format";
+import { detectNetwork } from "@/lib/format";
 import { useSession } from "next-auth/react";
 import { useVerify } from "@/hooks/useGapcastle";
 import { Loader2 } from "lucide-react";
@@ -55,11 +55,14 @@ export function DynamicFormFields({
   const watchedPeriod = watch("period");
   const watchedVariationCode = watch("variationCode");
   useEffect(() => {
-    if (category !== "cable" || !verifiedData?.plans?.length) return;
+    if (category !== "cable") return;
     // Showmax packages already price in their own duration (full_3 is 3 months),
     // so the bouquet x months maths must not be applied to them.
     if (values.providerSlug === "showmax") return;
-    const plan = verifiedData.plans.find((p: any) => p.variation_code === watchedVariationCode);
+    // Same source the bouquet grid renders from, so the duration still applies
+    // to a bouquet picked from stored products before verifying.
+    const source = verifiedData?.plans?.length ? verifiedData.plans : products;
+    const plan = source.find((p: any) => (p.variation_code || p.code) === watchedVariationCode);
     if (!plan) return;
     const months = Math.max(1, Number(watchedPeriod) || 1);
     setValue("amount", Number(plan.amount) * months);
@@ -291,6 +294,17 @@ export function DynamicFormFields({
                       variation_code: p.variation_code || "",
                     }));
                   }
+                  // Cable: prefer the live bouquet list verification returned —
+                  // Ringo's V-TV response, or the VTPass variations attached to
+                  // merchant-verify. Stored products stand in before the
+                  // smartcard is verified so a bouquet can still be chosen.
+                  if (category === "cable" && verifiedData?.plans?.length > 0) {
+                    visibleProducts = verifiedData.plans.map((p: any) => ({
+                      ...p,
+                      name: p.name || "Bouquet",
+                      variation_code: p.variation_code || p.code || "",
+                    }));
+                  }
                   // Internet (Smile): replace DB products with live plans returned
                   // by SRV (recharge) or V-Internet/SMILE (bundle) validation.
                   // DB has no Smile products (fetchProducts returns []).
@@ -327,7 +341,14 @@ export function DynamicFormFields({
                       {/* Education: skeleton while WAV is loading */}
                       {category === "education" && verifying && <Skeleton className="h-16 w-full" />}
                       {providerId && !verifying && visibleProducts.length === 0 && (
-                        <p className="text-sm text-muted-foreground">No plans available.</p>
+                        <p className="text-sm text-muted-foreground">
+                          {/* Some cable providers only return their bouquet list
+                              against a verified smartcard, so say so rather than
+                              claiming there is nothing to buy. */}
+                          {category === "cable" && !verifiedData
+                            ? "Verify your smartcard to load available bouquets."
+                            : "No plans available."}
+                        </p>
                       )}
                       {providerId && !verifying && visibleProducts.length > 0 && (
                         <ProductSelect
@@ -378,39 +399,10 @@ export function DynamicFormFields({
                             {verifiedData.metadata?.Due_Date && <p className="text-muted-foreground text-xs mt-1">Due Date: {new Date(verifiedData.metadata.Due_Date).toLocaleDateString()}</p>}
                             {verifiedData.metadata?.Customer_Type && <p className="text-muted-foreground text-xs mt-1">Type: {verifiedData.metadata.Customer_Type}</p>}
                             
-                            {/* Cable bouquet selector — populated from Ringo's V-TV
-                                response or the VTPass variations attached to
-                                merchant-verify. Hidden on a renewal, which bills the
-                                verified amount and must carry no bouquet code. */}
-                            {category === "cable" && verifiedData.plans?.length > 0 && values.transactionType !== "renew" && (
-                              <div className="mt-4 space-y-2 border-t pt-3">
-                                <Label className="text-xs font-semibold">Select Bouquet / Package</Label>
-                                <Select
-                                  value={values.variationCode || ""}
-                                  onValueChange={(code) => {
-                                    const plan = verifiedData.plans.find((p: any) => p.variation_code === code);
-                                    if (plan) {
-                                      setValue("variationCode", plan.variation_code);
-                                      setValue("amount", Number(plan.amount));
-                                      setValue("planName", plan.name);
-                                    }
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a bouquet..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {verifiedData.plans
-                                      .filter((p: any) => Number(p.amount) > 0)
-                                      .map((plan: any) => (
-                                        <SelectItem key={plan.variation_code} value={plan.variation_code}>
-                                          {plan.name} — {formatNaira(plan.amount)}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
+                            {/* The cable bouquet selector lives in the plan_grid
+                                field above, not here: gating it on verification
+                                hid the catalogue entirely for VTPass, whose
+                                bouquet list needs no smartcard. */}
 
                             {/* Smile Network Accounts */}
                             {verifiedData.metadata?.AccountList?.Account && (() => {
