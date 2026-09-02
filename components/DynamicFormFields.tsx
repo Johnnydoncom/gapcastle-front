@@ -68,23 +68,6 @@ export function DynamicFormFields({
     setValue("amount", Number(plan.amount) * months);
   }, [watchedPeriod, watchedVariationCode]);
 
-  // Cable renew/change switch. A renewal bills the amount merchant-verify
-  // returned and carries no bouquet code; a change starts from a fresh
-  // selection, so the stale amount must not survive the switch.
-  const watchedTransactionType = watch("transactionType");
-  useEffect(() => {
-    if (category !== "cable") return;
-    if (watchedTransactionType === "renew") {
-      setValue("variationCode", "");
-      setValue("planName", "");
-      const renewal = verifiedData?.metadata?.Renewal_Amount ?? verifiedData?.minimum_amount;
-      if (renewal) setValue("amount", Number(renewal));
-    } else {
-      setValue("amount", "");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchedTransactionType]);
-
   // Providers whose plan list is fetched by validation with no identifier:
   // education (WAEC/JAMB), Spectranet (PIN denominations) and Showmax
   // (subscription packages). None of them expose a merchant-verify endpoint.

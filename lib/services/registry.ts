@@ -84,7 +84,11 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       amount: z.union([z.number(), z.string()]).optional(),
       planName: z.string().optional(),
       variationCode: z.string().optional(),
-      // DSTV/GOTV only. Startimes always bills a bouquet code and rejects it.
+      // Always "change". VTPass requires subscription_type for DSTV/GOTV, but
+      // its merchant-verify returns no renewal amount (only Customer_Name,
+      // Status, Due_Date, Customer_Number, Customer_Type), so a renewal has
+      // nothing to bill against and is not offered. Kept in the schema so the
+      // value still reaches the API explicitly.
       transactionType: z.enum(["change", "renew"]).optional(),
     }).superRefine((data, ctx) => {
       // Showmax: package + delivery phone, no smartcard/bouquet.
@@ -102,14 +106,6 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter your smartcard number.", path: ["identifier"] });
       }
       const amt = Number(data.amount);
-      // A renewal bills the amount merchant-verify returned, so it needs no
-      // bouquet — only that verification has produced an amount.
-      if (data.transactionType === "renew") {
-        if (!amt || amt < 50) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Verify your smartcard to load the renewal amount.", path: ["identifier"] });
-        }
-        return;
-      }
       if (!data.variationCode && (!amt || amt < 50)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please verify your smartcard and select a bouquet.", path: ["identifier"] });
       }
@@ -117,16 +113,17 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
     defaultValues: { providerId: undefined, identifier: "", phone: "", period: 1, amount: "", transactionType: "change" },
     fields: [
       { name: "providerId", label: "Cable Provider", type: "provider_grid" },
-      // Only DSTV and GOTV support renewals; Startimes and Showmax always bill
-      // a selected package.
-      { name: "transactionType", label: "Subscription Type", type: "radio", options: [{ label: "Change bouquet", value: "change" }, { label: "Renew current plan", value: "renew" }], isHidden: (vals) => !["dstv", "gotv"].includes(vals.providerSlug) },
+      // No Subscription Type control: renewals would need an amount from
+      // merchant-verify, which VTPass does not return, so every purchase is a
+      // bouquet change. transactionType stays pinned to "change" in
+      // defaultValues so subscription_type is still sent.
       { name: "identifier", label: "Smartcard Number", type: "verify_input", placeholder: "Enter smartcard number", isHidden: (vals) => vals.providerSlug === "showmax" },
       { name: "phone", label: "Phone Number (for delivery)", type: "phone", placeholder: "08012345678", isHidden: (vals) => vals.providerSlug !== "showmax" },
       // Bouquets come from the live list when verification has returned one
       // (Ringo V-TV, or the VTPass variations attached to merchant-verify) and
       // from stored products otherwise, so a bouquet can be picked before
-      // verifying. Hidden on a renewal, which bills the verified amount.
-      { name: "planId", label: "Bouquet / Package", type: "plan_grid", isHidden: (vals) => vals.transactionType === "renew" },
+      // verifying.
+      { name: "planId", label: "Bouquet / Package", type: "plan_grid" },
       { name: "period", label: "Duration (Months)", type: "number", placeholder: "1", isHidden: (vals) => vals.providerSlug === "showmax" },
       { name: "amount", label: "Amount (₦)", type: "number", readonly: true, isHidden: (vals) => vals.providerSlug === "showmax" },
     ],
