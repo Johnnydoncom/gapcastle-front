@@ -141,10 +141,10 @@ export function AccountShell({ children, user }: AccountShellProps) {
         <div className="absolute top-0 left-0 w-full h-[300px] bg-gradient-to-br from-indigo-600/20 to-purple-600/20 blur-3xl opacity-50 pointer-events-none" />
         <div className="absolute bottom-0 right-0 w-full h-[300px] bg-gradient-to-tl from-blue-600/10 to-transparent blur-3xl opacity-50 pointer-events-none" />
 
-        <div className="relative z-10 flex h-[76px] shrink-0 items-center px-6 py-1.5 border-b border-white/[0.05]">
-          <div className="brightness-200 contrast-125 invert filter drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">
+        <div className="relative z-10 h-[70px] flex shrink-0 items-center px-6 py-1.5 border-b border-white/[0.05]">
+          <Link href="/account" className="brightness-300 contrast-150 iinvert filter">
             <Logo />
-          </div>
+          </Link>
         </div>
 
         <div className="relative z-10 flex-1 overflow-y-auto py-6 px-4 custom-scrollbar">
