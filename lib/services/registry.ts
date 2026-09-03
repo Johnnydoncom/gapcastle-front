@@ -90,6 +90,9 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       // nothing to bill against and is not offered. Kept in the schema so the
       // value still reaches the API explicitly.
       transactionType: z.enum(["change", "renew"]).optional(),
+      // Written only by a successful smartcard verification and cleared
+      // whenever the smartcard changes, so it doubles as the "verified" flag.
+      customerName: z.string().optional(),
     }).superRefine((data, ctx) => {
       // Showmax: package + delivery phone, no smartcard/bouquet.
       if (data.providerSlug === "showmax") {
@@ -105,12 +108,18 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       if (!data.identifier || data.identifier.length < 4) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter your smartcard number.", path: ["identifier"] });
       }
+      // The bouquet list is now available from stored products before the
+      // smartcard is verified, so picking one no longer implies verification
+      // happened — check it explicitly.
+      if (!data.customerName) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Verify your smartcard before continuing.", path: ["identifier"] });
+      }
       const amt = Number(data.amount);
       if (!data.variationCode && (!amt || amt < 50)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please verify your smartcard and select a bouquet.", path: ["identifier"] });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a bouquet.", path: ["planId"] });
       }
     }),
-    defaultValues: { providerId: undefined, identifier: "", phone: "", period: 1, amount: "", transactionType: "change" },
+    defaultValues: { providerId: undefined, identifier: "", phone: "", period: 1, amount: "", transactionType: "change", customerName: "" },
     fields: [
       { name: "providerId", label: "Cable Provider", type: "provider_grid" },
       // No Subscription Type control: renewals would need an amount from
@@ -137,8 +146,24 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       identifier: meterNumberSchema,
       phone: phoneSchema,
       amount: amountSchema,
+      // Written only by a successful meter verification and cleared whenever
+      // the meter number or type changes, so it doubles as the "verified"
+      // flag. Verification state itself lives in component state, which the
+      // schema cannot see.
+      customerName: z.string().optional(),
+    }).superRefine((data, ctx) => {
+      // Buying against an unverified meter sends a token to whoever owns that
+      // number, and the money is not recoverable, so verification is required
+      // rather than merely offered.
+      if (!data.customerName) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Verify the meter number before continuing.",
+          path: ["identifier"],
+        });
+      }
     }),
-    defaultValues: { providerId: undefined, meterType: "prepaid", identifier: "", phone: "", amount: "" },
+    defaultValues: { providerId: undefined, meterType: "prepaid", identifier: "", phone: "", amount: "", customerName: "" },
     fields: [
       { name: "providerId", label: "Distribution Company (Disco)", type: "provider_grid" },
       { name: "meterType", label: "Meter Type", type: "radio", options: [{ label: "Prepaid", value: "prepaid" }, { label: "Postpaid", value: "postpaid" }] },

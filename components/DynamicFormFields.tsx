@@ -68,6 +68,19 @@ export function DynamicFormFields({
     setValue("amount", Number(plan.amount) * months);
   }, [watchedPeriod, watchedVariationCode]);
 
+  // Editing the identifier or meter type invalidates a completed verification.
+  // Without this a user could verify one meter or smartcard, change the number,
+  // and buy against the new one under the old confirmation — the token or
+  // subscription would land on a stranger's account and is not recoverable.
+  const watchedIdentifier = watch("identifier");
+  const watchedMeterType = watch("meterType");
+  useEffect(() => {
+    if (category !== "electricity" && category !== "cable") return;
+    setVerifiedData(null);
+    setValue("customerName", "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedIdentifier, watchedMeterType]);
+
   // Providers whose plan list is fetched by validation with no identifier:
   // education (WAEC/JAMB), Spectranet (PIN denominations) and Showmax
   // (subscription packages). None of them expose a merchant-verify endpoint.
@@ -165,8 +178,13 @@ export function DynamicFormFields({
       
       if (res.is_valid === false) {
         toast.error(res.message || "Verification failed");
+        // Keep the gate closed on a failed lookup.
+        setValue("customerName", "");
       } else {
         toast.success("Verified successfully!");
+        // Records that this exact identifier was confirmed. The schema requires
+        // it, so submission stays blocked until a lookup succeeds.
+        setValue("customerName", res.customer_name || res.name || "");
         // Auto-fill amount if verification returns minimum amount or exact amount
         if (res.minimum_amount) setValue("amount", Number(res.minimum_amount));
         else if (res.metadata?.minimumPayable) setValue("amount", Number(res.metadata.minimumPayable));
@@ -201,6 +219,7 @@ export function DynamicFormFields({
       }
     } catch (err: any) {
       setVerifiedData({ is_valid: false, message: err.message || "Verification failed" });
+      setValue("customerName", "");
       toast.error(err.message || "Verification failed");
     } finally {
       setVerifying(false);
