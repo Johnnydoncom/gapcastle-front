@@ -60,6 +60,48 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [submitting, setSubmitting] = useState(false);
+
+  /*
+   * Seed the account holder's own details so they are not retyped on every
+   * purchase. These three always describe the buyer — a name to put on the
+   * request, an address to deliver to, a number to reach them on — so the
+   * session already knows them.
+   *
+   * Only empty fields are touched, so an edit is never overwritten, and only
+   * fields this service actually declares are set: writing an unknown key
+   * would leak it into the purchase metadata. Runs again when the session
+   * hydrates (it is null on first paint) and when "Pay Another" resets the
+   * form back to step 1.
+   */
+  useEffect(() => {
+    const user = session?.user as any;
+    if (!user || !config?.fields || step !== 1) return;
+
+    const prefill: Record<string, string | undefined> = {
+      consumer_name: user.name,
+      email: user.email,
+      phone: user.phone,
+    };
+
+    for (const [field, value] of Object.entries(prefill)) {
+      if (!value) continue;
+      if (!config.fields.some((f: any) => f.name === field)) continue;
+      const current = watch(field as any);
+      if (current === undefined || current === null || current === "") {
+        setValue(field as any, value);
+      }
+    }
+    // Depends on the values themselves rather than the session object, whose
+    // identity can change between renders. Re-running on that would refill a
+    // field the user had deliberately cleared.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    (session?.user as any)?.name,
+    (session?.user as any)?.email,
+    (session?.user as any)?.phone,
+    config?.slug,
+    step,
+  ]);
   const [resultTxn, setResultTxn] = useState<any>(null);
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [verifiedData, setVerifiedData] = useState<any>(null);
