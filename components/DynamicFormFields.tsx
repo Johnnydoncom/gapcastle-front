@@ -279,7 +279,13 @@ export function DynamicFormFields({
 
                 {field.type === "plan_grid" && (() => {
                   let visibleProducts = products;
-                  if (category === "credit_check" && values.requestType) {
+                  // First Central tags each report as consumer or commercial and
+                  // the entity toggle picks between them. CRC has no such split
+                  // and tags nothing, so filtering on request_type there removed
+                  // every product and left the dropdown empty. Only filter when
+                  // the catalogue actually carries the tag.
+                  if (category === "credit_check" && values.requestType
+                      && products.some(p => p.metadata?.request_type)) {
                     visibleProducts = products.filter(p => p.metadata?.request_type === values.requestType);
                   }
                   // Education and Spectranet: replace DB products with the

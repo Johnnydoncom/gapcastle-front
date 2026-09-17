@@ -333,30 +333,70 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
   "credit_check": {
     slug: "credit_check",
     title: "Credit Check",
+    // Two bureaux with different contracts. First Central splits consumer and
+    // commercial enquiries and treats the personal details as optional
+    // hints. CRC has no such split — every report type posts the same eight
+    // fields, all mandatory — and delivers the finished report by email rather
+    // than returning a file, so it needs a delivery address and a gender code
+    // that First Central never asks for.
     schema: z.object({
       providerId: z.number({ message: "Please select Credit Bureau" }),
+      providerSlug: z.string().optional(),
       planId: z.number({ message: "Please select a Report Type" }),
-      requestType: z.enum(["consumer", "commercial"], { message: "Select entity type" }),
+      requestType: z.enum(["consumer", "commercial"]).optional(),
       identifier: z.string().min(5, "Identifier is required"),
       consumer_name: z.string().optional(),
       date_of_birth: z.string().optional(),
       business_name: z.string().optional(),
       account_no: z.string().optional(),
+      email: z.string().optional(),
+      gender: z.string().optional(),
       phone: phoneSchema.optional().or(z.literal("")),
       amount: amountSchema,
       planName: z.string().optional(),
+      variationCode: z.string().optional(),
+    }).superRefine((data, ctx) => {
+      const require = (field: string, ok: boolean, message: string) => {
+        if (!ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: [field] });
+      };
+
+      if (data.providerSlug === "crc") {
+        // CRC rejects a partial payload with an opaque 400, so every field it
+        // marks mandatory is enforced here.
+        require("identifier", /^\d{11}$/.test((data.identifier ?? "").trim()),
+          "Enter the customer's 11-digit BVN.");
+        require("email", /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((data.email ?? "").trim()),
+          "CRC emails the report to this address.");
+        require("consumer_name", (data.consumer_name ?? "").trim().length >= 3,
+          "Enter the customer's full name.");
+        require("date_of_birth", !!data.date_of_birth,
+          "Date of birth is required.");
+        require("gender", data.gender === "001" || data.gender === "002",
+          "Select the customer's gender.");
+        require("phone", (data.phone ?? "").replace(/\D/g, "").length >= 10,
+          "Enter the customer's phone number.");
+        return;
+      }
+
+      require("requestType", data.requestType === "consumer" || data.requestType === "commercial",
+        "Select entity type");
     }),
-    defaultValues: { providerId: undefined, planId: undefined, requestType: "consumer", identifier: "", consumer_name: "", date_of_birth: "", business_name: "", account_no: "", phone: "", amount: "" },
+    defaultValues: { providerId: undefined, providerSlug: "", planId: undefined, requestType: "consumer", identifier: "", consumer_name: "", date_of_birth: "", business_name: "", account_no: "", email: "", gender: "", phone: "", amount: "" },
     fields: [
       { name: "providerId", label: "Credit Bureau", type: "provider_grid" },
-      { name: "requestType", label: "Entity Type", type: "radio", options: [{ label: "Individual", value: "consumer" }, { label: "Business", value: "commercial" }] },
+      // CRC has no individual/business distinction — even its corporate
+      // self-enquiry posts a BVN and a gender — so the control has nothing to
+      // bind to there.
+      { name: "requestType", label: "Entity Type", type: "radio", options: [{ label: "Individual", value: "consumer" }, { label: "Business", value: "commercial" }], isHidden: (vals) => vals.providerSlug === "crc" },
       { name: "planId", label: "Report Type", type: "plan_grid" },
       { name: "identifier", label: "BVN / RC Number", type: "text", placeholder: "Enter BVN or RC Number" },
-      { name: "consumer_name", label: "Consumer Name (Optional)", type: "text", placeholder: "Full Name", isHidden: (vals) => vals.requestType === "commercial" },
-      { name: "date_of_birth", label: "Date of Birth (Optional)", type: "date", isHidden: (vals) => vals.requestType === "commercial" },
-      { name: "business_name", label: "Business Name (Optional)", type: "text", placeholder: "Company Name", isHidden: (vals) => vals.requestType === "consumer" },
-      { name: "account_no", label: "Account Number (Optional)", type: "text", placeholder: "Account Number" },
-      { name: "phone", label: "Phone Number (Optional)", type: "phone", placeholder: "08012345678" },
+      { name: "consumer_name", label: "Full Name", type: "text", placeholder: "Full Name", isHidden: (vals) => vals.providerSlug !== "crc" && vals.requestType === "commercial" },
+      { name: "date_of_birth", label: "Date of Birth", type: "date", isHidden: (vals) => vals.providerSlug !== "crc" && vals.requestType === "commercial" },
+      { name: "gender", label: "Gender", type: "radio", options: [{ label: "Male", value: "001" }, { label: "Female", value: "002" }], isHidden: (vals) => vals.providerSlug !== "crc" },
+      { name: "email", label: "Report Delivery Email", type: "email", placeholder: "customer@example.com", isHidden: (vals) => vals.providerSlug !== "crc" },
+      { name: "business_name", label: "Business Name", type: "text", placeholder: "Company Name", isHidden: (vals) => vals.providerSlug === "crc" || vals.requestType === "consumer" },
+      { name: "account_no", label: "Account Number (Optional)", type: "text", placeholder: "Account Number", isHidden: (vals) => vals.providerSlug === "crc" },
+      { name: "phone", label: "Phone Number", type: "phone", placeholder: "08012345678" },
       { name: "amount", label: "Amount (₦)", type: "number", readonly: true },
     ],
   },
