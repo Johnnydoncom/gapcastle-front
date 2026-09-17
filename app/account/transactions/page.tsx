@@ -11,6 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { formatNaira, formatDate } from "@/lib/format";
+import { toast } from "sonner";
 import {
   Search, Download, Printer, Share2, X, Copy, Check,
   ArrowDownLeft, ArrowUpRight, ReceiptText, Clock, CheckCircle2,
@@ -109,7 +110,11 @@ export default function Transactions() {
       const res = await fetch(`${API_URL}/transactions/${txId}/download-report`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to download");
+      if (!res.ok) {
+        throw new Error(res.status === 404
+          ? "That report is no longer available. Please contact support."
+          : "The report could not be downloaded.");
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -119,8 +124,10 @@ export default function Transactions() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch {
-      // alert("Error downloading report.");
+    } catch (err: any) {
+      // This used to swallow every failure, so a download that never arrived
+      // looked identical to one that did.
+      toast.error(err?.message || "Could not download the report.");
     }
   }, [session]);
 

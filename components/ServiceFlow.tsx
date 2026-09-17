@@ -11,6 +11,7 @@ import { formatNaira } from "@/lib/format";
 import {
   ArrowLeft, CheckCircle2, Loader2, Wallet, Copy, Check,
   Zap, GraduationCap, Tv, Smartphone, ShieldCheck, Globe, Droplets, Flame, KeyRound, Download,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { serviceRegistry } from "@/lib/services/registry";
@@ -60,6 +61,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [submitting, setSubmitting] = useState(false);
   const [resultTxn, setResultTxn] = useState<any>(null);
+  const [downloadingReport, setDownloadingReport] = useState(false);
   const [verifiedData, setVerifiedData] = useState<any>(null);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [formValues, setFormValues] = useState<any>(null);
@@ -337,6 +339,36 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
       setTimeout(() => setTokenCopied(false), 2500);
     };
 
+    // Credit reports are delivered as a PDF the API holds on the user's behalf,
+    // so the file needs an authenticated request rather than a plain link the
+    // way an insurance certificate does.
+    const downloadReport = async () => {
+      const token = session?.accessToken;
+      if (!token || !resultTxn?.id) return;
+
+      setDownloadingReport(true);
+      try {
+        const res = await fetch(`${API_URL}/transactions/${resultTxn.id}/download-report`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error("The report could not be downloaded.");
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Report_${resultTxn.reference ?? resultTxn.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (err: any) {
+        toast.error(err?.message || "Could not download the report. Find it under Transactions.");
+      } finally {
+        setDownloadingReport(false);
+      }
+    };
+
     return (
       <div className="mx-auto max-w-md py-8 animate-in fade-in zoom-in duration-300">
         <div className="rounded-2xl border bg-card shadow-card relative overflow-hidden">
@@ -501,6 +533,37 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                       <Download className="h-4 w-4" />
                       Download Certificate
                     </a>
+                  </div>
+                )}
+
+                {/* Credit report download. The API reported the PDF via
+                    has_report, but this screen used to render nothing for it,
+                    so the only way to reach a report was to hunt for the
+                    transaction under Transactions and open its detail modal. */}
+                {isSuccess && resultTxn.has_report && (
+                  <div className="mt-3 rounded-xl border-2 border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 p-5 text-center">
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/40">
+                        <FileText className="h-4 w-4 text-violet-700 dark:text-violet-300" />
+                      </div>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-violet-700 dark:text-violet-300">
+                        Credit Report
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={downloadReport}
+                      disabled={downloadingReport}
+                      className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-violet-700 disabled:opacity-60"
+                    >
+                      {downloadingReport
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Download className="h-4 w-4" />}
+                      {downloadingReport ? "Preparing…" : "Download Report"}
+                    </button>
+                    <p className="mt-2 text-[10px] text-violet-500/80">
+                      Also available any time under Transactions
+                    </p>
                   </div>
                 )}
 
