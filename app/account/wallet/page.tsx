@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatNaira, formatDate } from "@/lib/format";
-import { Plus, ArrowDownToLine, Loader2, Landmark, Check, ChevronsUpDown, Save } from "lucide-react";
+import { Plus, ArrowDownToLine, Loader2, Landmark, Check, ChevronsUpDown, Save, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -41,6 +41,8 @@ export default function WalletPage() {
   const [banks, setBanks] = useState<{name: string, code: string}[]>([]);
   /** Why withdrawal cannot proceed, when the bank list could not be loaded. */
   const [withdrawUnavailable, setWithdrawUnavailable] = useState<string | null>(null);
+  /** Set when the resolved account is not in the user's own name. */
+  const [accountMismatch, setAccountMismatch] = useState<string | null>(null);
   const [bankCode, setBankCode] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [fetchingBanks, setFetchingBanks] = useState(false);
@@ -291,12 +293,23 @@ export default function WalletPage() {
           const data = await res.json();
           if (res.ok && data.success) {
             setAccountName(data.data.account_name);
+            // Withdrawals may only reach an account in the user's own name.
+            // The API enforces that on withdraw, but reporting it here means
+            // the mismatch is visible as soon as the account resolves rather
+            // than after the Withdraw button is pressed.
+            setAccountMismatch(
+              data.data.belongs_to_user === false
+                ? (data.data.message || "You can only withdraw to an account in your own name.")
+                : null
+            );
           } else {
             setAccountName("");
+            setAccountMismatch(null);
             toast.error(data.message || "Invalid account details");
           }
         } catch (error) {
           setAccountName("");
+          setAccountMismatch(null);
         } finally {
           setValidatingAccount(false);
         }
@@ -304,6 +317,7 @@ export default function WalletPage() {
       validateAccount();
     } else {
       setAccountName("");
+      setAccountMismatch(null);
     }
   }, [accountNumber, bankCode, token]);
 
@@ -329,6 +343,8 @@ export default function WalletPage() {
     if (!bankCode) return toast.error("Please select a bank");
     if (!accountNumber || accountNumber.length < 10) return toast.error("Please enter a valid account number");
     if (!accountName) return toast.error("Please ensure your account is validated first");
+    // Belt and braces alongside the disabled button; the API enforces this too.
+    if (accountMismatch) return toast.error(accountMismatch);
 
     setLoading(true);
     try {
@@ -582,15 +598,26 @@ export default function WalletPage() {
                   }} placeholder="0123456789" />
                   {validatingAccount && <p className="text-xs text-primary animate-pulse flex items-center"><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Verifying account...</p>}
                   {!validatingAccount && accountName && (
-                    <div className="rounded border bg-primary/5 p-2 text-sm text-primary flex items-center justify-between">
-                      <div className="flex items-center"><Check className="h-4 w-4 mr-2" /> {accountName}</div>
-                      {!beneficiaries.find(b => b.account_number === accountNumber && b.bank_code === bankCode) && (
-                        <label className="flex items-center gap-2 cursor-pointer text-xs ml-2">
-                          <input type="checkbox" checked={saveBeneficiary} onChange={(e) => setSaveBeneficiary(e.target.checked)} className="rounded border-primary/50 text-primary focus:ring-primary" />
-                          <span className="flex items-center"><Save className="h-3 w-3 mr-1" /> Save</span>
-                        </label>
-                      )}
-                    </div>
+                    accountMismatch ? (
+                      <div className="rounded border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
+                        <div className="flex items-center font-medium">
+                          <AlertCircle className="h-4 w-4 mr-2 shrink-0" /> {accountName}
+                        </div>
+                        {/* No "Save" option: a beneficiary that can never be
+                            withdrawn to is not worth keeping. */}
+                        <p className="mt-1 text-xs">{accountMismatch}</p>
+                      </div>
+                    ) : (
+                      <div className="rounded border bg-primary/5 p-2 text-sm text-primary flex items-center justify-between">
+                        <div className="flex items-center"><Check className="h-4 w-4 mr-2" /> {accountName}</div>
+                        {!beneficiaries.find(b => b.account_number === accountNumber && b.bank_code === bankCode) && (
+                          <label className="flex items-center gap-2 cursor-pointer text-xs ml-2">
+                            <input type="checkbox" checked={saveBeneficiary} onChange={(e) => setSaveBeneficiary(e.target.checked)} className="rounded border-primary/50 text-primary focus:ring-primary" />
+                            <span className="flex items-center"><Save className="h-3 w-3 mr-1" /> Save</span>
+                          </label>
+                        )}
+                      </div>
+                    )
                   )}
                 </div>
 
@@ -599,7 +626,7 @@ export default function WalletPage() {
                   <Input type="number" min={100} value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))} placeholder="Enter amount" />
                 </div>
 
-                <Button className="w-full mt-2" onClick={withdrawWallet} disabled={loading || amount <= 0 || !bankCode || !accountNumber || accountNumber.length !== 10 || !accountName}>
+                <Button className="w-full mt-2" onClick={withdrawWallet} disabled={loading || amount <= 0 || !bankCode || !accountNumber || accountNumber.length !== 10 || !accountName || !!accountMismatch}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {loading ? "Processing..." : `Withdraw ${amount ? formatNaira(amount) : ""}`}
                 </Button>
