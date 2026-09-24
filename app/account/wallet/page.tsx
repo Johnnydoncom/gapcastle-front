@@ -39,6 +39,8 @@ export default function WalletPage() {
 
   // Withdrawal state
   const [banks, setBanks] = useState<{name: string, code: string}[]>([]);
+  /** Why withdrawal cannot proceed, when the bank list could not be loaded. */
+  const [withdrawUnavailable, setWithdrawUnavailable] = useState<string | null>(null);
   const [bankCode, setBankCode] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [fetchingBanks, setFetchingBanks] = useState(false);
@@ -214,12 +216,20 @@ export default function WalletPage() {
         }
       });
       const data = await res.json();
-      if (res.ok && data.data) {
+      // Array-guarded: anything else reaching setBanks would throw on .map and
+      // take the whole page down rather than degrade.
+      if (res.ok && Array.isArray(data?.data)) {
         setBanks(data.data);
+        setWithdrawUnavailable(null);
+        return;
       }
+      // Withdrawals are refused when no active gateway is configured for them.
+      // Without this the modal just showed a disabled bank picker and no reason.
+      setBanks([]);
+      setWithdrawUnavailable(data?.message || "Withdrawals are currently unavailable. Please try again later.");
     } catch (error: any) {
       console.error("Failed to fetch banks", error);
-      toast.error("Failed to load banks");
+      setWithdrawUnavailable("Could not load the bank list. Please check your connection and try again.");
     } finally {
       setFetchingBanks(false);
     }
@@ -305,11 +315,12 @@ export default function WalletPage() {
         headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
       });
       const data = await res.json();
-      if (res.ok && data.data) {
-        setBeneficiaries(data.data);
-      }
+      // Guarded for the same reason as the bank list: a non-array here would
+      // crash the beneficiaries tab on .map.
+      setBeneficiaries(res.ok && Array.isArray(data?.data) ? data.data : []);
     } catch (error) {
       console.error(error);
+      setBeneficiaries([]);
     }
   };
 
@@ -556,6 +567,11 @@ export default function WalletPage() {
                     </PopoverContent>
                   </Popover>
                   {fetchingBanks && <p className="text-xs text-muted-foreground animate-pulse">Loading banks...</p>}
+                  {!fetchingBanks && withdrawUnavailable && (
+                    <p className="rounded border border-destructive/20 bg-destructive/5 p-2 text-xs text-destructive">
+                      {withdrawUnavailable}
+                    </p>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
