@@ -43,6 +43,27 @@ export default function WalletPage() {
   const [withdrawUnavailable, setWithdrawUnavailable] = useState<string | null>(null);
   /** Set when the resolved account is not in the user's own name. */
   const [accountMismatch, setAccountMismatch] = useState<string | null>(null);
+  /** The withdrawal gateway's fee percentage, returned alongside the bank list. */
+  const [withdrawalGatewayFee, setWithdrawalGatewayFee] = useState<number>(0);
+
+  /*
+   * charge_fee is a percentage of the amount, so the fee only exists once an
+   * amount is entered. Mirrors PaymentGateway::feeFor() on the API, which
+   * remains the figure actually charged — this is a preview.
+   */
+  const feeFor = (amount: number, percentage: number | string | undefined) => {
+    const pct = Number(percentage) || 0;
+    if (pct <= 0 || !amount || amount <= 0) return 0;
+    return Math.round(amount * pct * 100) / 10000;
+  };
+
+  const fundingFeePct = Number(
+    fundingGateways.find((g: any) => g.slug === selectedGatewaySlug)?.charge_fee ?? 0
+  );
+  const fundingFee = feeFor(amount, fundingFeePct);
+
+  const withdrawalFeePct = Number(withdrawalGatewayFee ?? 0);
+  const withdrawalFee = feeFor(amount, withdrawalFeePct);
   const [bankCode, setBankCode] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [fetchingBanks, setFetchingBanks] = useState(false);
@@ -222,6 +243,7 @@ export default function WalletPage() {
       // take the whole page down rather than degrade.
       if (res.ok && Array.isArray(data?.data)) {
         setBanks(data.data);
+        setWithdrawalGatewayFee(Number(data?.fee_percentage) || 0);
         setWithdrawUnavailable(null);
         return;
       }
@@ -485,7 +507,7 @@ export default function WalletPage() {
                           <div>
                             <p className="font-semibold text-sm leading-none">{gw.name}</p>
                             {gw.charge_fee > 0 && (
-                              <p className="text-[10px] text-muted-foreground mt-1">Fee: ₦{gw.charge_fee}</p>
+                              <p className="text-[10px] text-muted-foreground mt-1">Fee: {Number(gw.charge_fee)}%</p>
                             )}
                           </div>
                         </div>
@@ -501,6 +523,23 @@ export default function WalletPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* The fee is a percentage of the amount, so it only becomes real
+                once both an amount and a gateway are chosen. */}
+            {amount > 0 && selectedGatewaySlug && (
+              <div className="mt-3 space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Amount</span><span>{formatNaira(amount)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Processing fee{fundingFeePct > 0 ? ` (${fundingFeePct}%)` : ""}</span>
+                  <span>{formatNaira(fundingFee)}</span>
+                </div>
+                <div className="flex justify-between border-t pt-1 font-semibold">
+                  <span>You pay</span><span>{formatNaira(amount + fundingFee)}</span>
+                </div>
               </div>
             )}
 
@@ -625,6 +664,23 @@ export default function WalletPage() {
                   <Label>Amount (₦)</Label>
                   <Input type="number" min={100} value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))} placeholder="Enter amount" />
                 </div>
+
+                {/* Withdrawal deducts the amount plus the fee, so show both
+                    rather than leaving the difference to be discovered. */}
+                {amount > 0 && (
+                  <div className="space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>You receive</span><span>{formatNaira(amount)}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Processing fee{withdrawalFeePct > 0 ? ` (${withdrawalFeePct}%)` : ""}</span>
+                      <span>{formatNaira(withdrawalFee)}</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-1 font-semibold">
+                      <span>Deducted from wallet</span><span>{formatNaira(amount + withdrawalFee)}</span>
+                    </div>
+                  </div>
+                )}
 
                 <Button className="w-full mt-2" onClick={withdrawWallet} disabled={loading || amount <= 0 || !bankCode || !accountNumber || accountNumber.length !== 10 || !accountName || !!accountMismatch}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
