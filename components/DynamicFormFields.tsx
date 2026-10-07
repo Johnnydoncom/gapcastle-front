@@ -15,6 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ProviderSelect } from "@/components/ui/ProviderSelect";
 import { ProductSelect } from "@/components/ui/ProductSelect";
 import { InsuranceFields } from "@/components/InsuranceFields";
+import { RecipientCombobox, type ComboboxInputProps } from "@/components/RecipientCombobox";
+import type { BillBeneficiary } from "@/hooks/useGapcastle";
+import { cn } from "@/lib/utils";
 
 interface DynamicFormFieldsProps {
   fields: ServiceFieldConfig[];
@@ -26,6 +29,18 @@ interface DynamicFormFieldsProps {
   category: string;
   verifiedData: any;
   setVerifiedData: (data: any) => void;
+  /** Incremented when a saved beneficiary fills the form, to verify it straight away. */
+  autoVerifyRequest?: number;
+  /** Rendered directly under the provider field (the saved-beneficiary select). */
+  afterProviderField?: React.ReactNode;
+  /** Makes the recipient field a combobox offering these saved beneficiaries. */
+  recipient?: {
+    field: string;
+    beneficiaries: BillBeneficiary[];
+    activeId: number | null;
+    providerName?: string;
+    onSelect: (beneficiary: BillBeneficiary) => void;
+  };
 }
 
 export function DynamicFormFields({
@@ -37,7 +52,10 @@ export function DynamicFormFields({
   products,
   category,
   verifiedData,
-  setVerifiedData
+  setVerifiedData,
+  autoVerifyRequest = 0,
+  afterProviderField,
+  recipient,
 }: DynamicFormFieldsProps) {
   const { data: session } = useSession();
   const hasToken = !!session?.accessToken;
@@ -226,6 +244,46 @@ export function DynamicFormFields({
     }
   };
 
+  // A saved beneficiary was picked: verify its meter, smartcard or account
+  // now rather than making the customer press Verify on details we already
+  // hold. Declared after the effects that clear verification on an
+  // identifier change, so those run first within the same commit.
+  useEffect(() => {
+    if (!autoVerifyRequest) return;
+    const target = fields.find((f) =>
+      f.type === "verify_input"
+      && !(f.isHidden && f.isHidden({ ...values, providerSlug: provider?.slug }))
+      && String(values[f.name] ?? "").trim() !== "",
+    );
+    if (target) handleVerify(target.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoVerifyRequest]);
+
+  // Wraps the recipient field's input in the saved-beneficiary combobox;
+  // every other input renders unchanged.
+  const withRecipient = (
+    fieldName: string,
+    wrapperClassName: string,
+    renderInput: (combo: ComboboxInputProps) => React.ReactNode,
+  ) => {
+    if (!recipient || recipient.field !== fieldName || recipient.beneficiaries.length === 0) {
+      return renderInput({});
+    }
+    return (
+      <RecipientCombobox
+        beneficiaries={recipient.beneficiaries}
+        valueKey={fieldName}
+        query={values[fieldName]}
+        activeId={recipient.activeId}
+        providerName={recipient.providerName}
+        onSelect={recipient.onSelect}
+        className={wrapperClassName}
+      >
+        {renderInput}
+      </RecipientCombobox>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {fields.map((field) => {
@@ -239,8 +297,8 @@ export function DynamicFormFields({
         }
 
         return (
+          <React.Fragment key={field.name}>
           <Controller
-            key={field.name}
             name={field.name}
             control={control}
 
@@ -378,12 +436,15 @@ export function DynamicFormFields({
                 {field.type === "verify_input" && (
                   <div className="space-y-3">
                     <div className="flex gap-2">
-                      <Input
-                        {...formField}
-                        id={field.name}
-                        placeholder={field.placeholder}
-                        disabled={verifying}
-                      />
+                      {withRecipient(field.name, "flex-1", (combo) => (
+                        <Input
+                          {...formField}
+                          {...combo}
+                          id={field.name}
+                          placeholder={field.placeholder}
+                          disabled={verifying}
+                        />
+                      ))}
                       <Button
                         type="button"
                         variant="secondary"
@@ -448,13 +509,15 @@ export function DynamicFormFields({
 
                 {(field.type === "text" || field.type === "email" || field.type === "phone" || field.type === "number" || field.type === "date") && (
                   <>
+                    {withRecipient(field.name, "w-full", (combo) => (
                     <Input
                       {...formField}
+                      {...combo}
                       id={field.name}
                       type={field.type === "phone" ? "tel" : field.type}
                       placeholder={field.placeholder}
                       readOnly={field.readonly}
-                      className={field.readonly ? "bg-muted/50" : ""}
+                      className={cn(field.readonly && "bg-muted/50", combo.className)}
                       onChange={(e) => {
                         const val = e.target.value;
                         if (field.type === "number") {
@@ -474,6 +537,7 @@ export function DynamicFormFields({
                         }
                       }}
                     />
+                    ))}
                     {field.type === "phone" && (category === "airtime" || category === "data") && (() => {
                       const net = detectNetwork(values[field.name] || "");
                       if (!net) return null;
@@ -558,6 +622,8 @@ export function DynamicFormFields({
               </div>
             )}
           />
+          {field.type === "provider_grid" && afterProviderField}
+          </React.Fragment>
         );
       })}
     </div>

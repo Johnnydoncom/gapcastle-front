@@ -32,12 +32,21 @@ export interface ServiceConfig {
   schema: z.ZodObject<any>;
   fields: ServiceFieldConfig[];
   defaultValues: Record<string, any>;
+  /**
+   * The field that identifies who is being paid. It becomes a searchable
+   * combobox offering saved beneficiaries. A function when the field depends
+   * on the provider (Showmax, Spectranet and WAEC are paid to a phone).
+   * Omitted where the recipient is not a single input (insurance falls back
+   * to a beneficiary dropdown) or where nothing is saved (KYC, credit checks).
+   */
+  recipientField?: string | ((values: { providerSlug?: string }) => string);
 }
 
 export const serviceRegistry: Record<string, ServiceConfig> = {
   airtime: {
     slug: "airtime",
     title: "Buy Airtime",
+    recipientField: "identifier",
     schema: z.object({
       providerId: z.number({ message: "Please select a provider" }),
       identifier: phoneSchema,
@@ -53,6 +62,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
   data: {
     slug: "data",
     title: "Buy Data Bundle",
+    recipientField: "identifier",
     schema: z.object({
       providerId: z.number({ message: "Please select a provider" }),
       planId: z.number({ message: "Please select a data plan" }),
@@ -71,6 +81,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
   cable: {
     slug: "cable",
     title: "Cable TV Subscription",
+    recipientField: (vals) => (vals.providerSlug === "showmax" ? "phone" : "identifier"),
     // Covers DSTV/GOTV/Startimes (smartcard + bouquet) and Showmax (streaming:
     // delivered to a phone, pick a package). `providerSlug` is injected by
     // DynamicFormFields so the fields/schema can branch on Showmax.
@@ -140,6 +151,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
   electricity: {
     slug: "electricity",
     title: "Electricity Bill",
+    recipientField: "identifier",
     schema: z.object({
       providerId: z.number({ message: "Please select a provider" }),
       meterType: z.enum(["prepaid", "postpaid"], { message: "Select meter type" }),
@@ -175,6 +187,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
   internet: {
     slug: "internet",
     title: "Internet Subscription",
+    recipientField: (vals) => (vals.providerSlug === "spectranet" ? "phone" : "identifier"),
     // Ringo supports three internet purchase shapes:
     //  - Smile "bundle": pick a data plan (P-Internet)
     //  - Smile "recharge": top up the account by amount (SRP)
@@ -237,6 +250,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
   education: {
     slug: "education",
     title: "Education Services",
+    recipientField: (vals) => (vals.providerSlug === "jamb" ? "identifier" : "phone"),
     schema: z.object({
       providerId: z.number({ message: "Please select an Institution" }),
       providerSlug: z.string().optional(),
@@ -403,6 +417,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
   water: {
     slug: "water",
     title: "Water Bill",
+    recipientField: "identifier",
     schema: z.object({
       providerId: z.number({ message: "Please select Water Board" }),
       identifier: z.string().min(3, "Account ID is required"),
@@ -418,6 +433,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
   gas: {
     slug: "gas",
     title: "Gas Bill",
+    recipientField: "identifier",
     schema: z.object({
       providerId: z.number({ message: "Please select Gas Provider" }),
       identifier: z.string().min(3, "Account Number is required"),
@@ -433,6 +449,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
   collection: {
     slug: "collection",
     title: "Collections & Levies",
+    recipientField: "identifier",
     schema: z.object({
       providerId: z.number({ message: "Please select an Organisation" }),
       identifier: z.string().min(2, "Payer Name is required"),

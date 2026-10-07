@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession, signOut } from "next-auth/react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
@@ -187,4 +187,69 @@ export const usePaymentGateways = () => {
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
+};
+
+/**
+ * A recipient the user has paid before (phone, meter, smartcard, account,
+ * vehicle). Created by the API from successful payments only; `details` are
+ * the form values needed to repeat the payment.
+ */
+export interface BillBeneficiary {
+  id: number;
+  service: string;
+  bill_provider_id: number;
+  provider?: { id: number; name: string; slug: string; logo: string | null };
+  customer: string;
+  nickname: string | null;
+  customer_name: string | null;
+  display_name: string | null;
+  details: Record<string, string | number>;
+  last_amount: number | null;
+  use_count: number;
+  last_used_at: string | null;
+}
+
+export const useBillBeneficiaries = (serviceSlug?: string) => {
+  const { data: session } = useSession();
+  const user = session?.user;
+  const token = session?.accessToken;
+
+  return useQuery({
+    queryKey: ["billBeneficiaries", user?.id, serviceSlug],
+    enabled: !!user && !!token && !!serviceSlug,
+    queryFn: async (): Promise<{ items: BillBeneficiary[]; supported: boolean }> => {
+      const data = await fetchApi(`/bill-beneficiaries?service=${encodeURIComponent(serviceSlug as string)}`, token as string);
+      return {
+        items: Array.isArray(data?.data) ? data.data : [],
+        supported: data?.meta?.supported !== false,
+      };
+    },
+    // Only changes when the user pays, renames or deletes — all of which
+    // invalidate this key — so a remount need not refetch.
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useBillBeneficiaryMutations = () => {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["billBeneficiaries"] });
+
+  const rename = useMutation({
+    mutationFn: ({ id, nickname }: { id: number; nickname: string }) =>
+      fetchApi(`/bill-beneficiaries/${id}`, token as string, {
+        method: "PATCH",
+        body: JSON.stringify({ nickname }),
+      }),
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: number) =>
+      fetchApi(`/bill-beneficiaries/${id}`, token as string, { method: "DELETE" }),
+    onSuccess: invalidate,
+  });
+
+  return { rename, remove };
 };

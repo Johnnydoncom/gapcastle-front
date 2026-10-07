@@ -1,21 +1,23 @@
 "use client";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useWallet, useProviders, usePaymentGateways, useServices } from "@/hooks/useGapcastle";
+import { useWallet, useProviders, usePaymentGateways, useServices, useBillBeneficiaries, type BillBeneficiary } from "@/hooks/useGapcastle";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { formatNaira } from "@/lib/format";
 import {
   ArrowLeft, CheckCircle2, Loader2, Wallet, Copy, Check,
   Zap, GraduationCap, Tv, Smartphone, ShieldCheck, Globe, Droplets, Flame, KeyRound, Download,
-  FileText,
+  FileText, BookmarkPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { serviceRegistry } from "@/lib/services/registry";
 import { DynamicFormFields } from "@/components/DynamicFormFields";
+import { BeneficiarySelect } from "@/components/BeneficiarySelect";
 import { ReviewAndPay, type OrderSummaryItem } from "@/components/ReviewAndPay";
 import { openGatewayModal } from "@/lib/gateway-sdk";
 import { getDeliveryDisplayInfo, getDeliveryColorClasses, formatTokenDisplay } from "@/lib/delivery-display";
@@ -46,7 +48,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const currentService = (services as any[]).find((s: any) => s.slug === groupSlug);
   const cashbackPct = Number(currentService?.cashback_percentage ?? 0);
 
-  const { control, handleSubmit, watch, setValue, formState: { errors }, reset } = useForm({
+  const { control, handleSubmit, watch, setValue, clearErrors, formState: { errors }, reset } = useForm({
     resolver: config ? zodResolver(config.schema) : undefined,
     defaultValues: config?.defaultValues || {},
   });
@@ -55,6 +57,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const amount = watch("amount");
   const identifier = watch("identifier");
   const planName = watch("planName");
+  const phone = watch("phone");
 
   const products = providers.find((p: any) => p.id === providerId)?.products || [];
 
@@ -114,6 +117,33 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const [txnErrorMessage, setTxnErrorMessage] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  /*
+   * Saved beneficiaries. The list is shared with BeneficiarySelect through
+   * the react-query cache, so this is not a second request.
+   */
+  const { data: beneficiaryData } = useBillBeneficiaries(config?.slug);
+  const [saveBeneficiary, setSaveBeneficiary] = useState(true);
+  /** Bumped on each pick so DynamicFormFields re-verifies the chosen meter/smartcard. */
+  const [autoVerifyRequest, setAutoVerifyRequest] = useState(0);
+  // The saved recipient the form currently describes, if any. Derived from
+  // the values rather than remembered, so editing the number un-highlights it.
+  const matchedBeneficiary = findMatchingBeneficiary(beneficiaryData?.items, providerId, identifier, phone);
+
+  // The field that names who is being paid on the selected provider. It
+  // becomes a combobox offering that provider's saved beneficiaries.
+  const selectedProvider = providers.find((p: { id: number }) => p.id === providerId) as
+    { id: number; name?: string; slug?: string } | undefined;
+  const recipientField = typeof config?.recipientField === "function"
+    ? config.recipientField({ providerSlug: selectedProvider?.slug })
+    : config?.recipientField;
+  const recipientBeneficiaries = useMemo(
+    () => recipientField && beneficiaryData?.supported
+      ? (beneficiaryData.items ?? []).filter((b) =>
+          b.bill_provider_id === providerId && b.details?.[recipientField] !== undefined)
+      : [],
+    [beneficiaryData, providerId, recipientField],
+  );
+
   // Auto-select first provider by default
   useEffect(() => {
     if (providers.length > 0 && !providerId) {
@@ -147,6 +177,57 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const onReview = (data: any) => {
     setFormValues(data);
     setStep(2);
+  };
+
+  /**
+   * Fill the form from a saved beneficiary. Only fields this service declares
+   * are written: purchase metadata is spread from the form values, so an
+   * unknown key would leak into the payload.
+   */
+  const applyBeneficiary = (beneficiary: BillBeneficiary) => {
+    const provider = providers.find((p: { id: number }) => p.id === beneficiary.bill_provider_id);
+    if (!provider) return;
+
+    const declared = new Set([
+      ...Object.keys(config.defaultValues ?? {}),
+      ...config.fields.map((f) => f.name),
+    ]);
+    const details = beneficiary.details ?? {};
+
+    setVerifiedData(null);
+    // Mirrors ProviderSelect's onValueChange: a new provider invalidates the plan.
+    setValue("providerId", provider.id);
+    setValue("providerSlug", provider.slug ?? "");
+    setValue("planId", undefined);
+    setValue("planName", undefined);
+    setValue("variationCode", undefined);
+
+    // A recipient saved without an identifier (Showmax, WAEC and Spectranet
+    // are paid to a phone) must not inherit the previous pick's smartcard or
+    // profile ID, which would otherwise be sent as the customer.
+    if (declared.has("identifier") && !("identifier" in details)) {
+      setValue("identifier", config.defaultValues?.identifier ?? "");
+    }
+
+    for (const [field, value] of Object.entries(details)) {
+      if (declared.has(field)) setValue(field, value);
+    }
+
+    // Repeat the last amount where the customer types one; plan-priced
+    // services derive it from the plan instead.
+    const amountField = config.fields.find((f) => f.name === "amount");
+    const amountIsFreeForm = !!amountField && !amountField.readonly
+      && (amountField.type === "number" || amountField.type === "amount_quick_select");
+    if (amountIsFreeForm && beneficiary.last_amount) {
+      setValue("amount", Number(beneficiary.last_amount));
+    } else if (!amountIsFreeForm && declared.has("amount")) {
+      setValue("amount", "");
+    }
+
+    clearErrors();
+    // Education re-fetches its plan list on the provider change; verifying a
+    // JAMB profile at the same moment would race it for verifiedData.
+    if (groupSlug !== "education") setAutoVerifyRequest((n) => n + 1);
   };
 
   /**
@@ -189,6 +270,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
           setTxnStatus("successful");
           qc.invalidateQueries({ queryKey: ["wallet"] });
           qc.invalidateQueries({ queryKey: ["transactions"] });
+          qc.invalidateQueries({ queryKey: ["billBeneficiaries"] });
         } else if (status === "failed") {
           clearInterval(pollRef.current!);
           setTxnStatus("failed");
@@ -235,6 +317,9 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         // providers that require it on purchase (e.g. Ringo DSTV/GOTV) get it.
         metadata: { ...formValues, customer_name: verifiedData?.customer_name ?? verifiedData?.name },
         payment_gateway_id: selectedGateway?.slug === 'wallet' ? null : selectedGatewayId,
+        // An already-saved recipient is always refreshed; a new one only if
+        // the customer left "Save as beneficiary" on.
+        save_beneficiary: matchedBeneficiary ? true : saveBeneficiary,
       };
 
       const res = await fetch(`${API_URL}/transactions/purchase`, {
@@ -269,6 +354,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         } else {
           qc.invalidateQueries({ queryKey: ["wallet"] });
           qc.invalidateQueries({ queryKey: ["transactions"] });
+          qc.invalidateQueries({ queryKey: ["billBeneficiaries"] });
         }
         return;
       }
@@ -346,6 +432,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
       } else {
         qc.invalidateQueries({ queryKey: ["wallet"] });
         qc.invalidateQueries({ queryKey: ["transactions"] });
+        qc.invalidateQueries({ queryKey: ["billBeneficiaries"] });
       }
 
     } catch (error: any) {
@@ -650,6 +737,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                     setVerifiedData(null);
                     setResultTxn(null);
                     setTxnStatus("processing");
+                    setSaveBeneficiary(true);
                   }}
                 >
                   {isProcessing ? "Pay Another" : "Done"}
@@ -707,6 +795,25 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                 category={groupSlug}
                 verifiedData={verifiedData}
                 setVerifiedData={setVerifiedData}
+                autoVerifyRequest={autoVerifyRequest}
+                recipient={recipientField ? {
+                  field: recipientField,
+                  beneficiaries: recipientBeneficiaries,
+                  activeId: matchedBeneficiary?.id ?? null,
+                  providerName: selectedProvider?.name,
+                  onSelect: applyBeneficiary,
+                } : undefined}
+                // Services whose recipient is not a single input (insurance:
+                // the plate sits inside the vehicle form) get a dropdown instead.
+                afterProviderField={recipientField ? undefined : (
+                  <BeneficiarySelect
+                    category={groupSlug}
+                    providerId={providerId}
+                    providerName={selectedProvider?.name}
+                    activeId={matchedBeneficiary?.id ?? null}
+                    onSelect={applyBeneficiary}
+                  />
+                )}
               />
               <Button type="submit" className="w-full h-12 text-base font-semibold" size="lg">
                 Continue to Review
@@ -717,7 +824,10 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
           {step === 2 && formValues && (
             <ReviewAndPay
               title={title}
-              items={buildSummaryItems(formValues, providers, verifiedData)}
+              items={[
+                ...(matchedBeneficiary ? [{ label: "Beneficiary", value: <span className="font-semibold">{beneficiaryLabel(matchedBeneficiary)}</span> }] : []),
+                ...buildSummaryItems(formValues, providers, verifiedData),
+              ]}
               amount={Number(formValues.amount)}
               cashbackPct={cashbackPct}
               balance={balance}
@@ -728,6 +838,26 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
               onPay={handlePay}
               submitting={submitting}
               paymentStatusLabel={paymentStatusLabel}
+              beforePayment={beneficiaryData?.supported && !matchedBeneficiary ? (
+                <label
+                  htmlFor="save-beneficiary"
+                  className="flex cursor-pointer items-center gap-3 rounded-2xl border bg-card p-4 transition hover:border-primary/40"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <BookmarkPlus className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">Save as beneficiary</span>
+                    <span className="block text-xs text-muted-foreground">Pay them again in one tap next time.</span>
+                  </span>
+                  <Switch
+                    id="save-beneficiary"
+                    checked={saveBeneficiary}
+                    onCheckedChange={setSaveBeneficiary}
+                    disabled={submitting}
+                  />
+                </label>
+              ) : null}
             />
           )}
         </div>
@@ -801,6 +931,41 @@ function buildSummaryItems(
   }
 
   return items;
+}
+
+/** Strip formatting so "+234 803..." and "0803..." compare equal. */
+function normaliseRecipient(value: unknown): string {
+  const compact = String(value ?? "").replace(/\s+/g, "").toLowerCase();
+  const intl = compact.match(/^\+?234(\d{10})$/);
+  return intl ? `0${intl[1]}` : compact;
+}
+
+/**
+ * The saved beneficiary the current form values point at: same provider and
+ * the same recipient. That is the identifier when one was saved, otherwise
+ * the phone (Showmax, WAEC and Spectranet are paid to a phone number).
+ */
+function findMatchingBeneficiary(
+  beneficiaries: BillBeneficiary[] | undefined,
+  providerId: unknown,
+  identifier: unknown,
+  phone: unknown,
+): BillBeneficiary | null {
+  if (!beneficiaries?.length || !providerId) return null;
+
+  return beneficiaries.find((b) => {
+    if (b.bill_provider_id !== providerId) return false;
+    const savedIdentifier = b.details?.identifier;
+    if (savedIdentifier !== undefined) {
+      return normaliseRecipient(savedIdentifier) === normaliseRecipient(identifier);
+    }
+    const savedPhone = b.details?.phone;
+    return savedPhone !== undefined && normaliseRecipient(savedPhone) === normaliseRecipient(phone);
+  }) ?? null;
+}
+
+function beneficiaryLabel(b: BillBeneficiary): string {
+  return b.display_name ? `${b.display_name} · ${b.customer}` : b.customer;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

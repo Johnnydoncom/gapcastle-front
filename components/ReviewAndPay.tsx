@@ -34,6 +34,8 @@ export interface ReviewAndPayProps {
   submitting: boolean;
   /** Optional live status message (modal opening, verifying, polling) */
   paymentStatusLabel?: string | null;
+  /** Optional content between the order summary and the payment methods (e.g. "Save as beneficiary"). */
+  beforePayment?: React.ReactNode;
 }
 
 export function ReviewAndPay({
@@ -49,6 +51,7 @@ export function ReviewAndPay({
   onPay,
   submitting,
   paymentStatusLabel,
+  beforePayment,
 }: ReviewAndPayProps) {
   const selectedGateway = gateways.find((g: any) => g.id === selectedGatewayId);
   const isWallet = selectedGateway?.slug === "wallet";
@@ -107,6 +110,8 @@ export function ReviewAndPay({
           </div>
         )}
       </div>
+
+      {beforePayment}
 
       {/* Payment Method */}
       <div className="space-y-3">
