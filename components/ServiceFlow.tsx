@@ -343,10 +343,21 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
       if (selectedGateway?.slug === 'wallet') {
         const txnData = result.data || result;
         setResultTxn(txnData);
-        setTxnStatus(txnData.status === "successful" ? "successful" : "processing");
         setSubmitting(false);
         setStep(3);
-        
+
+        // The provider can refuse a purchase outright (e.g. a Maximum Demand
+        // meter); show its reason now rather than polling for it.
+        if (txnData.status === "failed") {
+          setTxnStatus("failed");
+          setTxnErrorMessage(txnData.error_message || "Your payment could not be processed.");
+          qc.invalidateQueries({ queryKey: ["wallet"] });
+          qc.invalidateQueries({ queryKey: ["transactions"] });
+          return;
+        }
+
+        setTxnStatus(txnData.status === "successful" ? "successful" : "processing");
+
         if (txnData.status !== "successful") {
           qc.invalidateQueries({ queryKey: ["wallet"] });
           qc.invalidateQueries({ queryKey: ["transactions"] });

@@ -301,6 +301,11 @@ export default function Transactions() {
                     {isCredit ? "+" : "−"}{formatNaira(activeTxn.amount)}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">{formatDate(activeTxn.created_at)}</p>
+                  {activeTxn.status === "failed" && activeTxn.error_message && (
+                    <p className="mx-auto mt-3 max-w-sm rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                      {activeTxn.error_message}
+                    </p>
+                  )}
                 </div>
 
                 {/* Receipt body */}
