@@ -18,7 +18,9 @@ export default function PaymentSuccessPage() {
             <CheckCircle2 className="h-10 w-10" />
           </div>
           <h2 className="text-2xl font-extrabold tracking-tight">Payment Successful</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Your transaction has been processed.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            We&apos;ve received your payment and are delivering your order. Its status will update in your history shortly.
+          </p>
 
           {reference && (
             <div className="bg-card mt-6 rounded-xl p-5 text-left text-sm border border-border shadow-sm">
@@ -32,10 +34,10 @@ export default function PaymentSuccessPage() {
           )}
 
           <div className="mt-8 flex gap-3">
-            <Button variant="outline" className="flex-1 font-semibold" onClick={() => router.push("/app/transactions")}>
-              View Historyy
+            <Button variant="outline" className="flex-1 font-semibold" onClick={() => router.push("/account/transactions")}>
+              View History
             </Button>
-            <Button className="flex-1 font-semibold" onClick={() => router.push("/app/services")}>
+            <Button className="flex-1 font-semibold" onClick={() => router.push("/account/services")}>
               Done
             </Button>
           </div>

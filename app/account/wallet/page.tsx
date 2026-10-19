@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useWallet, useTransactions } from "@/hooks/useGapcastle";
+import { useState, useEffect, useRef } from "react";
+import { useWallet, useTransactions, useFlutterwaveFeeQuote } from "@/hooks/useGapcastle";
 import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,25 @@ export default function WalletPage() {
     fundingGateways.find((g: any) => g.slug === selectedGatewaySlug)?.charge_fee ?? 0
   );
   const fundingFee = feeFor(amount, fundingFeePct);
+
+  /*
+   * Flutterwave charges its fee plus VAT on that fee. Those figures come from
+   * the API rather than feeFor(), so the total shown is the total charged; the
+   * amount is debounced so typing does not fire a quote per keystroke.
+   */
+  const isFlutterwaveFunding = selectedGatewaySlug === "flutterwave";
+  const [quoteAmount, setQuoteAmount] = useState(0);
+  useEffect(() => {
+    const timer = setTimeout(() => setQuoteAmount(amount), 400);
+    return () => clearTimeout(timer);
+  }, [amount]);
+  const fundingQuote = useFlutterwaveFeeQuote(quoteAmount, fundOpen && isFlutterwaveFunding && quoteAmount >= 100);
+  // Only a quote for the amount now in the box may be shown or paid.
+  const fundingBreakdown = fundingQuote.data?.transaction_amount === amount ? fundingQuote.data : undefined;
+  const fundingQuotePending = isFlutterwaveFunding && !fundingBreakdown;
+
+  // Blocks a second top-up starting before the first has re-rendered the button.
+  const fundingRef = useRef(false);
 
   const withdrawalFeePct = Number(withdrawalGatewayFee ?? 0);
   const withdrawalFee = feeFor(amount, withdrawalFeePct);
@@ -133,6 +152,8 @@ export default function WalletPage() {
 
   const fundWallet = async () => {
     if (amount < 100) return toast.error("Minimum funding is ₦100");
+    if (fundingRef.current) return;
+    fundingRef.current = true;
     setLoading(true);
     try {
       if (!token) throw new Error("Authentication token not found.");
@@ -149,7 +170,10 @@ export default function WalletPage() {
         body: JSON.stringify({ 
           amount, 
           gateway_slug: selectedGatewaySlug || undefined,
-          redirect_url: typeof window !== 'undefined' ? `${window.location.origin}/account/wallet?funded=true` : undefined
+          redirect_url: typeof window !== 'undefined' ? `${window.location.origin}/account/wallet?funded=true` : undefined,
+          // The total the customer confirmed. The API recalculates the charges
+          // and refuses the top-up if this no longer matches.
+          expected_total: isFlutterwaveFunding ? fundingBreakdown?.total_payable : undefined,
         })
       });
       const data = await res.json();
@@ -157,7 +181,11 @@ export default function WalletPage() {
         if (typeof window !== "undefined") signOut({ callbackUrl: "/login" });
         throw new Error("Session expired. Please log in again.");
       }
-      if (!res.ok) throw new Error(data.message || "Failed to initiate funding");
+      if (!res.ok) {
+        // The charges changed since the quote: show the new total for review.
+        if (data?.errors?.expected_total) qc.invalidateQueries({ queryKey: ["flutterwaveFeeQuote"] });
+        throw new Error(data.message || "Failed to initiate funding");
+      }
       
       const txnData = data.data;
       if (!txnData?.payment_url && !txnData?.access_code && !txnData?.reference) {
@@ -224,6 +252,7 @@ export default function WalletPage() {
       toast.error(error.message);
     } finally {
       setLoading(false);
+      fundingRef.current = false;
     }
   };
 
@@ -506,7 +535,11 @@ export default function WalletPage() {
                           </div>
                           <div>
                             <p className="font-semibold text-sm leading-none">{gw.name}</p>
-                            {gw.charge_fee > 0 && (
+                            {gw.fee_structure ? (
+                              <p className="text-[10px] text-muted-foreground mt-1">
+                                Fee: {Number(gw.fee_structure.transaction_fee_percentage)}% + {Number(gw.fee_structure.vat_percentage)}% VAT on fee
+                              </p>
+                            ) : gw.charge_fee > 0 && (
                               <p className="text-[10px] text-muted-foreground mt-1">Fee: {Number(gw.charge_fee)}%</p>
                             )}
                           </div>
@@ -528,7 +561,42 @@ export default function WalletPage() {
 
             {/* The fee is a percentage of the amount, so it only becomes real
                 once both an amount and a gateway are chosen. */}
-            {amount > 0 && selectedGatewaySlug && (
+            {amount > 0 && isFlutterwaveFunding && (
+              <div className="mt-3 space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Amount</span><span>{formatNaira(amount)}</span>
+                </div>
+                {fundingBreakdown ? (
+                  <>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Transaction fee ({fundingBreakdown.transaction_fee_percentage}%)</span>
+                      <span>{formatNaira(fundingBreakdown.transaction_fee)}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>VAT ({fundingBreakdown.vat_percentage}% of fee)</span>
+                      <span>{formatNaira(fundingBreakdown.vat)}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Total charges</span><span>{formatNaira(fundingBreakdown.total_fee)}</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-1 font-semibold">
+                      <span>You pay</span><span>{formatNaira(fundingBreakdown.total_payable)}</span>
+                    </div>
+                    <p className="pt-1 text-[11px] text-muted-foreground">
+                      Your wallet is credited {formatNaira(amount)}. VAT applies to the fee only.
+                    </p>
+                  </>
+                ) : fundingQuote.error && quoteAmount === amount ? (
+                  <p className="text-xs font-medium text-destructive">{fundingQuote.error.message}</p>
+                ) : amount >= 100 ? (
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Calculating charges…
+                  </p>
+                ) : null}
+              </div>
+            )}
+
+            {amount > 0 && selectedGatewaySlug && !isFlutterwaveFunding && (
               <div className="mt-3 space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Amount</span><span>{formatNaira(amount)}</span>
@@ -543,7 +611,7 @@ export default function WalletPage() {
               </div>
             )}
 
-            <Button className="w-full mt-4" onClick={fundWallet} disabled={loading || amount < 100 || (!selectedGatewaySlug && fundingGateways.length > 0)}>
+            <Button className="w-full mt-4" onClick={fundWallet} disabled={loading || amount < 100 || (!selectedGatewaySlug && fundingGateways.length > 0) || fundingQuotePending}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {loading ? "Redirecting to payment..." : `Fund ${amount ? formatNaira(amount) : "wallet"}`}
             </Button>

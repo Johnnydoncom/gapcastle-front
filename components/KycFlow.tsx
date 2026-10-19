@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useWallet, usePaymentGateways } from "@/hooks/useGapcastle";
+import { useWallet, usePaymentGateways, useFlutterwaveFeeQuote } from "@/hooks/useGapcastle";
+import { newIdempotencyKey } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatNaira } from "@/lib/format";
@@ -106,6 +107,17 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
       else setSelectedGatewayId(gateways[0].id);
     }
   }, [gateways, selectedGatewayId]);
+
+  // Flutterwave adds its fee and the VAT on it. The figures come from the API
+  // so the review shows exactly what will be charged.
+  const isFlutterwaveSelected = gateways.find((g: { id: number; slug: string }) => g.id === selectedGatewayId)?.slug === "flutterwave";
+  const flutterwaveQuote = useFlutterwaveFeeQuote(Number(selectedProduct?.amount ?? 0), step === 2 && isFlutterwaveSelected);
+  const gatewayCharges = isFlutterwaveSelected
+    ? { breakdown: flutterwaveQuote.data, loading: flutterwaveQuote.isFetching, error: flutterwaveQuote.error?.message }
+    : undefined;
+
+  // Blocks a second payment starting before the first has re-rendered the button.
+  const payingRef = useRef(false);
 
   // Clean up polling on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
@@ -216,6 +228,8 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
     if (selectedGateway?.slug === 'wallet' && Number(selectedProduct.amount) > balance) {
       return toast.error("Insufficient wallet balance. Fund your wallet or select another payment method.");
     }
+    if (payingRef.current) return;
+    payingRef.current = true;
 
     setSubmitting(true);
     setPaymentStatusLabel(null);
@@ -236,6 +250,10 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
           endpoint: selectedProduct.metadata?.endpoint,
         },
         payment_gateway_id: selectedGateway?.slug === 'wallet' ? null : selectedGatewayId,
+        // The total the customer confirmed. The API recalculates the charges
+        // and refuses the payment if this no longer matches.
+        expected_total: selectedGateway?.slug === "flutterwave" ? flutterwaveQuote.data?.total_payable : undefined,
+        idempotency_key: newIdempotencyKey(),
       };
 
       const res = await fetch(`${API_URL}/transactions/purchase`, {
@@ -253,7 +271,11 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
         if (typeof window !== "undefined") signOut({ callbackUrl: "/login" });
         throw new Error("Session expired.");
       }
-      if (!res.ok) throw new Error(result.message || "Payment failed");
+      if (!res.ok) {
+        // The charges changed since the quote: show the new total for review.
+        if (result?.errors?.expected_total) qc.invalidateQueries({ queryKey: ["flutterwaveFeeQuote"] });
+        throw new Error(result.message || "Payment failed");
+      }
 
       // ── Step 2a: wallet pay — done immediately ─────────────────────────────
       if (selectedGateway?.slug === 'wallet') {
@@ -291,7 +313,9 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
         reference,
         accessCode: access_code ?? "",
         paymentUrl: payment_url ?? null,
-        amount: Number(selectedProduct.amount),
+        // The server's total, which includes any gateway charges — never a
+        // figure computed here.
+        amount: Number(txnData.total ?? selectedProduct.amount),
         email: userEmail,
         name: (session?.user as any)?.name ?? undefined,
         publicKey: selectedGateway!.public_key ?? "",
@@ -345,6 +369,8 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
       toast.error(error.message);
       setSubmitting(false);
       setPaymentStatusLabel(null);
+    } finally {
+      payingRef.current = false;
     }
   };
 
@@ -710,6 +736,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
               onPay={handlePay}
               submitting={submitting}
               paymentStatusLabel={paymentStatusLabel}
+              charges={gatewayCharges}
             />
           )}
         </div>

@@ -19,6 +19,9 @@ export default function PaymentFailedPage() {
           </div>
           <h2 className="text-2xl font-extrabold tracking-tight">Payment Failed</h2>
           <p className="mt-2 text-sm text-muted-foreground">Your transaction could not be completed.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            If money left your account, your order completes automatically once the payment is confirmed. Otherwise, contact support with the reference below.
+          </p>
 
           {reference && (
             <div className="bg-card mt-6 rounded-xl p-5 text-left text-sm border border-border shadow-sm">
@@ -32,10 +35,10 @@ export default function PaymentFailedPage() {
           )}
 
           <div className="mt-8 flex gap-3">
-            <Button variant="outline" className="flex-1 font-semibold" onClick={() => router.push("/app/transactions")}>
+            <Button variant="outline" className="flex-1 font-semibold" onClick={() => router.push("/account/transactions")}>
               View History
             </Button>
-            <Button className="flex-1 font-semibold" onClick={() => router.push("/app/services")}>
+            <Button className="flex-1 font-semibold" onClick={() => router.push("/account/services")}>
               Try Again
             </Button>
           </div>

@@ -170,6 +170,54 @@ export const useProducts = (providerId?: number) => {
   });
 };
 
+/** Flutterwave's charges on an amount, as calculated by the API. */
+export interface FeeBreakdown {
+  currency: string;
+  transaction_amount: number;
+  transaction_fee: number;
+  vat: number;
+  total_fee: number;
+  net_amount: number;
+  total_payable: number;
+  transaction_fee_percentage: number;
+  vat_percentage: number;
+}
+
+/**
+ * Flutterwave's fee and the VAT on it for an amount. The API is the only place
+ * these are worked out, so the total shown is the total charged; purchase and
+ * funding recalculate it and refuse a payment whose total no longer matches.
+ */
+export const useFlutterwaveFeeQuote = (amount: number, enabled: boolean) => {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+
+  return useQuery<FeeBreakdown, Error>({
+    queryKey: ["flutterwaveFeeQuote", amount],
+    enabled: !!token && enabled && amount > 0,
+    queryFn: async () => {
+      const res = await fetch(
+        `${API_URL}/payment-gateways/flutterwave/fee-quote?amount=${encodeURIComponent(String(amount))}`,
+        { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } }
+      );
+
+      if (res.status === 401) {
+        if (typeof window !== "undefined") signOut({ callbackUrl: "/login" });
+        throw new Error("Unauthorized");
+      }
+
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // A 422 carries the reason, e.g. the amount is below Flutterwave's minimum.
+        throw new Error(body?.errors?.amount?.[0] ?? body?.message ?? "Could not calculate the Flutterwave charges.");
+      }
+      return body.data as FeeBreakdown;
+    },
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
 export const usePaymentGateways = () => {
   const { data: session } = useSession();
   const token = session?.accessToken;
