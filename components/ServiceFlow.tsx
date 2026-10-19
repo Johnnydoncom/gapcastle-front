@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useWallet, useProviders, usePaymentGateways, useServices, useBillBeneficiaries, type BillBeneficiary } from "@/hooks/useGapcastle";
+import { useWallet, useProviders, useServiceApis, usePaymentGateways, useServices, useBillBeneficiaries, type BillApiOption, type BillBeneficiary } from "@/hooks/useGapcastle";
 import { newIdempotencyKey } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -29,11 +29,13 @@ export interface ServiceFlowProps {
   category: string;
   title?: string;
   initialProviders?: any[];
+  /** Bill APIs for a service whose customer chooses one (Credit Check). */
+  initialApis?: BillApiOption[];
   initialWallet?: any;
   [key: string]: any; // To allow legacy props without TS errors
 }
 
-export function ServiceFlow({ category, title: overrideTitle, initialProviders, initialWallet }: ServiceFlowProps) {
+export function ServiceFlow({ category, title: overrideTitle, initialProviders, initialApis, initialWallet }: ServiceFlowProps) {
   const router = useRouter();
   const { data: session } = useSession();
   const qc = useQueryClient();
@@ -43,16 +45,34 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const config = serviceRegistry[category];
   const groupSlug = config?.slug || category;
 
-  const { data: providers = [] } = useProviders(groupSlug, initialProviders);
-
-  // cashback_percentage for this service (from the /services endpoint)
-  const currentService = (services as any[]).find((s: any) => s.slug === groupSlug);
-  const cashbackPct = Number(currentService?.cashback_percentage ?? 0);
+  // Credit Check lets the customer choose the bill API (bureau). Everything
+  // else keeps the backend's priority routing and never asks.
+  const usesApiSelection = !!config?.fields?.some((f) => f.type === "api_grid");
+  const { data: billApis = [] } = useServiceApis(groupSlug, initialApis, usesApiSelection);
 
   const { control, handleSubmit, watch, setValue, clearErrors, formState: { errors }, reset } = useForm({
     resolver: config ? zodResolver(config.schema) : undefined,
     defaultValues: config?.defaultValues || {},
   });
+
+  const billApi: string | undefined = usesApiSelection ? (watch("billApi") || undefined) : undefined;
+  // The server-rendered list is the default API's, so it only seeds the
+  // query for that API — never one the customer switched to.
+  const providersSeed = !billApi || billApi === (initialApis?.[0]?.slug ?? billApis[0]?.slug)
+    ? initialProviders
+    : undefined;
+  const { data: providers = [], isLoading: providersLoading } = useProviders(groupSlug, providersSeed, billApi);
+
+  // Default to the first (highest-priority) API until the customer picks one.
+  useEffect(() => {
+    if (usesApiSelection && billApis.length > 0 && !billApi) {
+      setValue("billApi", billApis[0].slug);
+    }
+  }, [usesApiSelection, billApis, billApi, setValue]);
+
+  // cashback_percentage for this service (from the /services endpoint)
+  const currentService = (services as any[]).find((s: any) => s.slug === groupSlug);
+  const cashbackPct = Number(currentService?.cashback_percentage ?? 0);
 
   const providerId = watch("providerId");
   const amount = watch("amount");
@@ -149,8 +169,11 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   useEffect(() => {
     if (providers.length > 0 && !providerId) {
       setValue("providerId", providers[0].id);
+      // The provider grid is hidden when a chosen API serves one provider,
+      // so its slug (which picks the bureau's form fields) is set here.
+      if (usesApiSelection) setValue("providerSlug", providers[0].slug ?? "");
     }
-  }, [providers, providerId, setValue]);
+  }, [providers, providerId, setValue, usesApiSelection]);
 
   const { data: gateways = [] } = usePaymentGateways();
   const [selectedGatewayId, setSelectedGatewayId] = useState<number | null>(null);
@@ -313,6 +336,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
       // phone, then email (always present), so the purchase never fails
       // validation on an empty customer.
       const userPhone = (session?.user as any)?.phone ?? "";
+      const { billApi: selectedBillApi, ...metadataValues } = formValues;
       const payload: any = {
         bill_service_slug: groupSlug,
         bill_provider_id: formValues.providerId,
@@ -321,7 +345,9 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         amount: Number(formValues.amount),
         // Forward the verified customer name (from meter/smartcard lookup) so
         // providers that require it on purchase (e.g. Ringo DSTV/GOTV) get it.
-        metadata: { ...formValues, customer_name: verifiedData?.customer_name ?? verifiedData?.name },
+        metadata: { ...metadataValues, customer_name: verifiedData?.customer_name ?? verifiedData?.name },
+        // The bill API the customer chose (Credit Check) processes the bill.
+        ...(usesApiSelection && selectedBillApi ? { bill_api_slug: selectedBillApi } : {}),
         payment_gateway_id: selectedGateway?.slug === 'wallet' ? null : selectedGatewayId,
         // An already-saved recipient is always refreshed; a new one only if
         // the customer left "Save as beneficiary" on.
@@ -813,6 +839,8 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                 watch={watch}
                 setValue={setValue}
                 providers={providers}
+                providersLoading={usesApiSelection && providersLoading}
+                billApis={billApis}
                 products={products}
                 category={groupSlug}
                 verifiedData={verifiedData}
@@ -848,7 +876,8 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
               title={title}
               items={[
                 ...(matchedBeneficiary ? [{ label: "Beneficiary", value: <span className="font-semibold">{beneficiaryLabel(matchedBeneficiary)}</span> }] : []),
-                ...buildSummaryItems(formValues, providers, verifiedData),
+                ...buildSummaryItems(formValues, providers, verifiedData,
+                  billApis.find((api) => api.slug === formValues.billApi)?.name),
               ]}
               amount={Number(formValues.amount)}
               cashbackPct={cashbackPct}
@@ -892,13 +921,19 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
 function buildSummaryItems(
   formValues: Record<string, any>,
   providers: any[],
-  verifiedData: any
+  verifiedData: any,
+  billApiName?: string
 ): any[] {
   const items: any[] = [];
 
-  // Provider
+  // The bill API the customer chose (Credit Check bureau)
+  if (billApiName) {
+    items.push({ label: "Credit Bureau", value: billApiName });
+  }
+
+  // Provider — implied by the chosen bureau when it serves only one
   const provider = providers.find((p) => p.id === formValues.providerId);
-  if (provider) {
+  if (provider && (!billApiName || providers.length > 1)) {
     items.push({ label: "Provider", value: provider.name });
   }
 

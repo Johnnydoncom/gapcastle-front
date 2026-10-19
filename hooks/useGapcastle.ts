@@ -118,20 +118,52 @@ export const useServices = () => {
   });
 };
 
-export const useProviders = (serviceSlug?: string, initialData?: any[]) => {
+/**
+ * Providers for a service. `billApiSlug` scopes the list to one bill API on
+ * services where the customer chooses it (Credit Check); omitted, the backend
+ * lists what its highest-priority API serves.
+ */
+export const useProviders = (serviceSlug?: string, initialData?: any[], billApiSlug?: string) => {
   const { data: session } = useSession();
   const token = session?.accessToken;
 
   return useQuery({
-    queryKey: ["providers", serviceSlug],
+    queryKey: ["providers", serviceSlug, billApiSlug ?? null],
     enabled: !!token,
     queryFn: async () => {
-      const endpoint = serviceSlug ? `/services/${serviceSlug}/providers` : "/services";
+      const query = billApiSlug ? `?bill_api_slug=${encodeURIComponent(billApiSlug)}` : "";
+      const endpoint = serviceSlug ? `/services/${serviceSlug}/providers${query}` : "/services";
       const data = await fetchApi(endpoint, token as string);
       const providers = data.data || data;
       return Array.isArray(providers) ? providers : [];
     },
     initialData: initialData,
+  });
+};
+
+export interface BillApiOption {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+/**
+ * The active bill APIs a customer may choose between, in priority order (the
+ * first is the default). Only Credit Check offers the choice.
+ */
+export const useServiceApis = (serviceSlug: string, initialData?: BillApiOption[], enabled = true) => {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+
+  return useQuery<BillApiOption[]>({
+    queryKey: ["serviceApis", serviceSlug],
+    enabled: enabled && !!token,
+    queryFn: async () => {
+      const data = await fetchApi(`/services/${serviceSlug}/apis`, token as string);
+      const apis = data.data || data;
+      return Array.isArray(apis) ? apis : [];
+    },
+    initialData: enabled ? initialData : undefined,
   });
 };
 

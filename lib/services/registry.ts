@@ -2,6 +2,7 @@ import { z } from "zod";
 import { phoneSchema, amountSchema, meterNumberSchema, smartcardNumberSchema, emailSchema, bvnSchema, dateSchema } from "./zod-schemas";
 
 export type FieldType =
+  | "api_grid"
   | "provider_grid"
   | "plan_grid"
   | "text"
@@ -24,6 +25,8 @@ export interface ServiceFieldConfig {
   options?: { label: string; value: string | number }[]; 
   readonly?: boolean; 
   isHidden?: (values: any) => boolean; 
+  /** Hides a provider_grid while it holds a single, auto-selected provider. */
+  hideWhenSingle?: boolean;
 }
 
 export interface ServiceConfig {
@@ -354,6 +357,9 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
     // than returning a file, so it needs a delivery address and a gender code
     // that First Central never asks for.
     schema: z.object({
+      // The bill API (bureau) the customer chose; the backend processes the
+      // report through it instead of its default priority routing.
+      billApi: z.string().optional(),
       providerId: z.number({ message: "Please select Credit Bureau" }),
       providerSlug: z.string().optional(),
       planId: z.number({ message: "Please select a Report Type" }),
@@ -395,9 +401,13 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       require("requestType", data.requestType === "consumer" || data.requestType === "commercial",
         "Select entity type");
     }),
-    defaultValues: { providerId: undefined, providerSlug: "", planId: undefined, requestType: "consumer", identifier: "", consumer_name: "", date_of_birth: "", business_name: "", account_no: "", email: "", gender: "", phone: "", amount: "" },
+    defaultValues: { billApi: "", providerId: undefined, providerSlug: "", planId: undefined, requestType: "consumer", identifier: "", consumer_name: "", date_of_birth: "", business_name: "", account_no: "", email: "", gender: "", phone: "", amount: "" },
     fields: [
-      { name: "providerId", label: "Credit Bureau", type: "provider_grid" },
+      // Every active bureau is offered; the choice scopes the provider and
+      // report list below and decides which API runs the report.
+      { name: "billApi", label: "Credit Bureau", type: "api_grid" },
+      // Each bureau serves a single provider, which is picked automatically.
+      { name: "providerId", label: "Provider", type: "provider_grid", hideWhenSingle: true },
       // CRC has no individual/business distinction — even its corporate
       // self-enquiry posts a BVN and a gender — so the control has nothing to
       // bind to there.

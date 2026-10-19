@@ -16,7 +16,7 @@ import { ProviderSelect } from "@/components/ui/ProviderSelect";
 import { ProductSelect } from "@/components/ui/ProductSelect";
 import { InsuranceFields } from "@/components/InsuranceFields";
 import { RecipientCombobox, type ComboboxInputProps } from "@/components/RecipientCombobox";
-import type { BillBeneficiary } from "@/hooks/useGapcastle";
+import type { BillApiOption, BillBeneficiary } from "@/hooks/useGapcastle";
 import { cn } from "@/lib/utils";
 
 interface DynamicFormFieldsProps {
@@ -25,6 +25,10 @@ interface DynamicFormFieldsProps {
   watch: UseFormWatch<any>;
   setValue: UseFormSetValue<any>;
   providers: any[];
+  /** True while the provider list for a newly chosen bill API loads. */
+  providersLoading?: boolean;
+  /** Bill APIs offered by an api_grid field (Credit Check bureaux). */
+  billApis?: BillApiOption[];
   products: any[];
   category: string;
   verifiedData: any;
@@ -49,6 +53,8 @@ export function DynamicFormFields({
   watch,
   setValue,
   providers,
+  providersLoading = false,
+  billApis = [],
   products,
   category,
   verifiedData,
@@ -287,7 +293,8 @@ export function DynamicFormFields({
   return (
     <div className="space-y-6">
       {fields.map((field) => {
-        const isHidden = field.isHidden && field.isHidden({ ...values, providerSlug: provider?.slug });
+        const isHidden = (field.isHidden && field.isHidden({ ...values, providerSlug: provider?.slug }))
+          || (field.hideWhenSingle && providers.length === 1 && !providersLoading);
 
         // Insurance fields — self-contained component with its own cascading state
         if (field.type === "insurance_fields") {
@@ -308,7 +315,40 @@ export function DynamicFormFields({
                   {field.label}
                 </Label>
 
-                {field.type === "provider_grid" && (
+                {field.type === "api_grid" && (
+                  billApis.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-6 text-center">
+                      <p className="text-sm font-medium text-foreground">No options available right now</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        This service is temporarily unavailable. Please check back shortly.
+                      </p>
+                    </div>
+                  ) : (
+                    <ProviderSelect
+                      providers={billApis}
+                      value={billApis.find((api) => api.slug === formField.value)?.id}
+                      placeholder={`Select ${field.label}`}
+                      onValueChange={(id) => {
+                        const selected = billApis.find((api) => api.id === id);
+                        if (!selected || selected.slug === formField.value) return;
+                        formField.onChange(selected.slug);
+                        // Providers and reports belong to one API, so a new
+                        // choice clears everything picked under the old one.
+                        // ServiceFlow selects the new API's provider once loaded.
+                        setValue("providerId", undefined);
+                        setValue("providerSlug", "");
+                        setValue("planId", undefined);
+                        setValue("planName", "");
+                        setValue("variationCode", "");
+                        setValue("amount", "");
+                      }}
+                    />
+                  )
+                )}
+
+                {field.type === "provider_grid" && providersLoading && <Skeleton className="h-14 w-full" />}
+
+                {field.type === "provider_grid" && !providersLoading && (
                   providers.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-6 text-center">
                       <p className="text-sm font-medium text-foreground">No providers available right now</p>
