@@ -3,14 +3,6 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { formatNaira } from "@/lib/format";
 import { Wallet, Edit2, Loader2, ShieldCheck, Gift } from "lucide-react";
-import type { FeeBreakdown } from "@/hooks/useGapcastle";
-
-/** Gateway charges for the selected method (Flutterwave), fetched from the API. */
-export interface GatewayCharges {
-  breakdown?: FeeBreakdown;
-  loading: boolean;
-  error?: string | null;
-}
 
 export interface OrderSummaryItem {
   label: string;
@@ -44,12 +36,6 @@ export interface ReviewAndPayProps {
   paymentStatusLabel?: string | null;
   /** Optional content between the order summary and the payment methods (e.g. "Save as beneficiary"). */
   beforePayment?: React.ReactNode;
-  /**
-   * Charges the selected gateway adds to the payment. When present, payment
-   * stays disabled until the API has returned them, so the customer always
-   * confirms the exact total they will be charged.
-   */
-  charges?: GatewayCharges;
 }
 
 export function ReviewAndPay({
@@ -66,15 +52,10 @@ export function ReviewAndPay({
   submitting,
   paymentStatusLabel,
   beforePayment,
-  charges,
 }: ReviewAndPayProps) {
   const selectedGateway = gateways.find((g: any) => g.id === selectedGatewayId);
   const isWallet = selectedGateway?.slug === "wallet";
   const insufficientBalance = isWallet && amount > balance;
-
-  const breakdown = charges?.breakdown;
-  const chargesPending = !!charges && (charges.loading || !!charges.error || !breakdown);
-  const total = breakdown ? breakdown.total_payable : amount;
 
   const earnableCashback = cashbackPct > 0 ? amount * (cashbackPct / 100) : 0;
 
@@ -101,46 +82,13 @@ export function ReviewAndPay({
 
         <div className="mt-4 border-t pt-4 space-y-2">
           <SummaryRow label="Subtotal" value={formatNaira(amount)} />
-          {charges ? (
-            breakdown ? (
-              <>
-                <SummaryRow
-                  label={`Transaction fee (${breakdown.transaction_fee_percentage}%)`}
-                  value={formatNaira(breakdown.transaction_fee)}
-                />
-                <SummaryRow
-                  label={`VAT (${breakdown.vat_percentage}% of fee)`}
-                  value={formatNaira(breakdown.vat)}
-                />
-                <SummaryRow
-                  label="Total charges"
-                  value={<span className="font-semibold">{formatNaira(breakdown.total_fee)}</span>}
-                />
-              </>
-            ) : charges.error ? (
-              <p className="text-xs font-medium text-destructive">{charges.error}</p>
-            ) : (
-              <SummaryRow
-                label="Charges"
-                value={<span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Calculating…</span>}
-              />
-            )
-          ) : (
-            <SummaryRow label="Fee" value={formatNaira(0)} />
-          )}
+          <SummaryRow label="Fee" value={formatNaira(0)} />
         </div>
 
         <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/5 px-4 py-3 ring-1 ring-primary/10">
           <span className="text-sm font-semibold text-muted-foreground">Total</span>
-          <span className="text-xl font-black tracking-tight text-primary">
-            {chargesPending ? "—" : formatNaira(total)}
-          </span>
+          <span className="text-xl font-black tracking-tight text-primary">{formatNaira(amount)}</span>
         </div>
-        {breakdown && (
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            {selectedGateway?.name ?? "The payment provider"}&apos;s charges are added to your payment. VAT applies to the fee only.
-          </p>
-        )}
 
         {/* Cashback earnable row */}
         {earnableCashback > 0 && (
@@ -226,17 +174,15 @@ export function ReviewAndPay({
           className="w-full h-14 text-base font-bold shadow-lg shadow-primary/20"
           size="lg"
           onClick={onPay}
-          disabled={submitting || !selectedGatewayId || insufficientBalance || chargesPending}
+          disabled={submitting || !selectedGatewayId || insufficientBalance}
         >
           {submitting ? (
             <>
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               Processing…
             </>
-          ) : chargesPending ? (
-            "Pay"
           ) : (
-            `Pay ${formatNaira(total)}`
+            `Pay ${formatNaira(amount)}`
           )}
         </Button>
         {insufficientBalance && (

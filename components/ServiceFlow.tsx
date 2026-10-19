@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useWallet, useProviders, usePaymentGateways, useServices, useBillBeneficiaries, useFlutterwaveFeeQuote, type BillBeneficiary } from "@/hooks/useGapcastle";
+import { useWallet, useProviders, usePaymentGateways, useServices, useBillBeneficiaries, type BillBeneficiary } from "@/hooks/useGapcastle";
 import { newIdempotencyKey } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -163,14 +163,6 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
       else setSelectedGatewayId(gateways[0].id);
     }
   }, [gateways, selectedGatewayId]);
-
-  // Flutterwave adds its fee and the VAT on it. The figures come from the API
-  // so the review shows exactly what will be charged.
-  const isFlutterwaveSelected = gateways.find((g: { id: number; slug: string }) => g.id === selectedGatewayId)?.slug === "flutterwave";
-  const flutterwaveQuote = useFlutterwaveFeeQuote(Number(formValues?.amount ?? 0), step === 2 && isFlutterwaveSelected);
-  const gatewayCharges = isFlutterwaveSelected
-    ? { breakdown: flutterwaveQuote.data, loading: flutterwaveQuote.isFetching, error: flutterwaveQuote.error?.message }
-    : undefined;
 
   // Blocks a second payment starting before the first has re-rendered the button.
   const payingRef = useRef(false);
@@ -334,9 +326,6 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         // An already-saved recipient is always refreshed; a new one only if
         // the customer left "Save as beneficiary" on.
         save_beneficiary: matchedBeneficiary ? true : saveBeneficiary,
-        // The total the customer confirmed. The API recalculates the charges
-        // and refuses the payment if this no longer matches.
-        expected_total: selectedGateway?.slug === "flutterwave" ? flutterwaveQuote.data?.total_payable : undefined,
         idempotency_key: newIdempotencyKey(),
       };
 
@@ -355,11 +344,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         if (typeof window !== "undefined") signOut({ callbackUrl: "/login" });
         throw new Error("Session expired.");
       }
-      if (!res.ok) {
-        // The charges changed since the quote: show the new total for review.
-        if (result?.errors?.expected_total) qc.invalidateQueries({ queryKey: ["flutterwaveFeeQuote"] });
-        throw new Error(result.message || "Payment failed");
-      }
+      if (!res.ok) throw new Error(result.message || "Payment failed");
 
       // ── Step 2a: wallet pay — done immediately ─────────────────────────────
       if (selectedGateway?.slug === 'wallet') {
@@ -408,9 +393,9 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         reference,
         accessCode: access_code ?? "",
         paymentUrl: payment_url ?? null,
-        // The server's total, which includes any gateway charges — never a
-        // figure computed here.
-        amount: Number(txnData.total ?? formValues.amount),
+        // What the gateway's checkout charges: the bill amount plus any gateway
+        // charges (Flutterwave), from the server. Never displayed in the app.
+        amount: Number(txnData.checkout_amount ?? txnData.total ?? formValues.amount),
         email: userEmail,
         name: (session?.user as any)?.name ?? undefined,
         phone: (session?.user as any)?.phone ?? undefined,
@@ -875,7 +860,6 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
               onPay={handlePay}
               submitting={submitting}
               paymentStatusLabel={paymentStatusLabel}
-              charges={gatewayCharges}
               beforePayment={beneficiaryData?.supported && !matchedBeneficiary ? (
                 <label
                   htmlFor="save-beneficiary"
