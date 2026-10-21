@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession, signOut } from "next-auth/react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
@@ -21,9 +21,50 @@ export const fetchApi = async (endpoint: string, token: string | null, options: 
   }
 
   if (!res.ok) {
-    throw new Error(`API Error: ${res.status}`);
+    // Prefer the API's own (user-safe) message: the first validation error,
+    // then the envelope's message, so callers can show it as-is.
+    const body = await res.json().catch(() => null);
+    const firstFieldError = body?.errors ? (Object.values(body.errors).flat()[0] as string | undefined) : undefined;
+    throw new Error(firstFieldError || body?.message || `API Error: ${res.status}`);
   }
   return res.json();
+};
+
+export interface PaginationMeta {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
+export interface Paginated<T> {
+  items: T[];
+  meta: PaginationMeta;
+}
+
+/** A Laravel paginated resource collection, one page at a time. */
+const usePaginatedQuery = <T,>(key: unknown[], endpoint: string) => {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+
+  return useQuery({
+    queryKey: [...key, session?.user?.id],
+    enabled: !!token,
+    queryFn: async (): Promise<Paginated<T>> => {
+      const data = await fetchApi(endpoint, token as string);
+      return {
+        items: Array.isArray(data?.data) ? data.data : [],
+        meta: {
+          current_page: data?.meta?.current_page ?? 1,
+          last_page: data?.meta?.last_page ?? 1,
+          per_page: data?.meta?.per_page ?? 10,
+          total: data?.meta?.total ?? 0,
+        },
+      };
+    },
+    // Keep the current page on screen while the next one loads.
+    placeholderData: keepPreviousData,
+  });
 };
 
 export const useWallet = (initialData?: any) => {
@@ -284,4 +325,93 @@ export const useBillBeneficiaryMutations = () => {
   });
 
   return { rename, remove };
+};
+
+export type RewardType = "cashback" | "referral" | "withdrawal";
+
+export interface RewardsSummary {
+  balance: number;
+  total_cashback_earned: number;
+  total_referral_earned: number;
+  total_withdrawn: number;
+  referral: {
+    code: string;
+    link: string;
+    total_referred: number;
+    total_rewarded: number;
+  };
+  /** The refer & earn terms an admin has set. */
+  program: {
+    enabled: boolean;
+    reward_amount: number;
+    minimum_transaction_amount: number;
+  };
+}
+
+/** One movement of the rewards (cashback) balance. */
+export interface RewardEntry {
+  id: number;
+  type: RewardType;
+  type_label: string;
+  direction: "credit" | "debit";
+  is_credit: boolean;
+  amount: number;
+  balance_after: number;
+  description: string;
+  reference: string;
+  transaction_reference: string | null;
+  created_at: string;
+}
+
+export interface Referral {
+  id: number;
+  name: string;
+  joined_at: string;
+  rewarded: boolean;
+  rewarded_at: string | null;
+}
+
+export const useRewardsSummary = () => {
+  const { data: session } = useSession();
+  const user = session?.user;
+  const token = session?.accessToken;
+
+  return useQuery({
+    queryKey: ["rewards", "summary", user?.id],
+    enabled: !!user && !!token,
+    queryFn: async (): Promise<RewardsSummary> => {
+      const data = await fetchApi("/rewards", token as string);
+      return data.data;
+    },
+    staleTime: 60 * 1000,
+  });
+};
+
+export const useRewardHistory = (page: number, type?: RewardType) => {
+  const params = new URLSearchParams({ page: String(page), per_page: "10" });
+  if (type) params.set("type", type);
+
+  return usePaginatedQuery<RewardEntry>(["rewards", "history", page, type ?? "all"], `/rewards/history?${params}`);
+};
+
+export const useReferrals = (page: number) =>
+  usePaginatedQuery<Referral>(["rewards", "referrals", page], `/rewards/referrals?page=${page}&per_page=5`);
+
+/** Move rewards balance into the main wallet. */
+export const useWithdrawCashback = () => {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (amount: number) =>
+      fetchApi("/wallet/withdraw-cashback", token as string, {
+        method: "POST",
+        body: JSON.stringify({ amount }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["rewards"] });
+      qc.invalidateQueries({ queryKey: ["wallet"] });
+    },
+  });
 };

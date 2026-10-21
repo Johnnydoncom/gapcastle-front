@@ -12,6 +12,8 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { useRewardsSummary } from "@/hooks/useGapcastle";
+import { formatNaira } from "@/lib/format";
 
 const mainNav = [
   { to: "/account", label: "Dashboard", icon: LayoutDashboard },
@@ -53,6 +55,11 @@ export function AccountShell({ children, user }: AccountShellProps) {
   const userName = user?.name || "User";
   const userEmail = user?.email || "";
   const userInitial = userName.charAt(0).toUpperCase();
+
+  // The bonus is whatever an admin has set; hide the promo while it is paused.
+  const { data: rewards } = useRewardsSummary();
+  const referralProgram = rewards?.program;
+  const showReferralPromo = !referralProgram || (referralProgram.enabled && referralProgram.reward_amount > 0);
 
   const SideNavItem = ({ item, onClick }: { item: any; onClick?: () => void }) => {
     const Icon = item.icon;
@@ -184,6 +191,7 @@ export function AccountShell({ children, user }: AccountShellProps) {
         </div>
 
         {/* Promo Card */}
+        {showReferralPromo && (
         <div className="relative z-10 px-4 pb-4">
           <div className="rounded-2xl bg-gradient-to-br from-white/10 to-white/5 p-4 border border-white/10 relative overflow-hidden backdrop-blur-md shadow-2xl">
             <div className="absolute -top-4 -right-4 p-4 opacity-[0.15] rotate-12">
@@ -197,7 +205,9 @@ export function AccountShell({ children, user }: AccountShellProps) {
                 <p className="text-[13px] font-bold text-white tracking-wide">Refer & Earn</p>
               </div>
               <p className="text-[11px] text-slate-300 mb-4 leading-relaxed font-medium">
-                Invite friends and earn a ₦500 bonus for each successful referral.
+                {referralProgram
+                  ? `Invite friends and earn a ${formatNaira(referralProgram.reward_amount)} bonus for each successful referral.`
+                  : "Invite friends and earn a bonus for each successful referral."}
               </p>
               <Button size="sm" className="w-full text-xs h-9 rounded-xl bg-white text-indigo-950 hover:bg-slate-100 hover:text-indigo-900 font-bold shadow-lg transition-all hover:scale-[1.02]" asChild>
                 <Link href="/account/rewards">Invite Friends</Link>
@@ -205,6 +215,7 @@ export function AccountShell({ children, user }: AccountShellProps) {
             </div>
           </div>
         </div>
+        )}
 
         {/* User Profile Footer */}
         <div className="relative z-10 border-t border-white/[0.05] p-4 bg-black/20 backdrop-blur-sm">

@@ -101,7 +101,7 @@ export default function Dashboard() {
         </div>
         {/* display only on desktop devices and remove on mobile devices */}
         <div className="rounded-2xl border bg-card p-6 shadow-card hidden md:block">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Cashback earned</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Rewards balance</p>
           <p className="mt-2 text-3xl font-bold text-success">{formatNaira(wallet?.cashback_balance ?? 0)}</p>
           <Link href="/account/rewards" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
             View rewards <ArrowUpRight className="h-3 w-3" />
