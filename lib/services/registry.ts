@@ -1,6 +1,25 @@
 import { z } from "zod";
 import { phoneSchema, amountSchema, meterNumberSchema, smartcardNumberSchema, emailSchema, bvnSchema, dateSchema } from "./zod-schemas";
 
+/**
+ * CBN-prescribed enquiry purposes First Central accepts on live. Must match
+ * FirstCentralService::ENQUIRY_REASONS in the API exactly.
+ */
+export const FIRST_CENTRAL_ENQUIRY_REASONS: string[] = [
+  "Application of existing credit by a borrower",
+  "Reviewing of existing credit facilities",
+  "Opening of new accounts (as part of KYC principle)",
+  "Funds transfer of N1,000,000.00 (one million naira) and above",
+  "Prospective/current employee checks",
+  "Tenancy contracts (for identification purposes)",
+  "Grant/review of insurance policies",
+  "Application for contracts/pre-paid services (telephone etc.)",
+  "Court judgment",
+  "Credit scoring of the client by credit bureau",
+  "A written consent from the client",
+  "Legislation",
+];
+
 export type FieldType =
   | "api_grid"
   | "provider_grid"
@@ -369,6 +388,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       date_of_birth: z.string().optional(),
       business_name: z.string().optional(),
       account_no: z.string().optional(),
+      enquiry_reason: z.string().optional(),
       email: z.string().optional(),
       gender: z.string().optional(),
       phone: phoneSchema.optional().or(z.literal("")),
@@ -400,8 +420,10 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
 
       require("requestType", data.requestType === "consumer" || data.requestType === "commercial",
         "Select entity type");
+      require("enquiry_reason", FIRST_CENTRAL_ENQUIRY_REASONS.includes(data.enquiry_reason ?? ""),
+        "Select the purpose of this enquiry.");
     }),
-    defaultValues: { billApi: "", providerId: undefined, providerSlug: "", planId: undefined, requestType: "consumer", identifier: "", consumer_name: "", date_of_birth: "", business_name: "", account_no: "", email: "", gender: "", phone: "", amount: "" },
+    defaultValues: { billApi: "", providerId: undefined, providerSlug: "", planId: undefined, requestType: "consumer", identifier: "", consumer_name: "", date_of_birth: "", business_name: "", account_no: "", enquiry_reason: "", email: "", gender: "", phone: "", amount: "" },
     fields: [
       // Every active bureau is offered; the choice scopes the provider and
       // report list below and decides which API runs the report.
@@ -420,6 +442,7 @@ export const serviceRegistry: Record<string, ServiceConfig> = {
       { name: "email", label: "Report Delivery Email", type: "email", placeholder: "customer@example.com", isHidden: (vals) => vals.providerSlug !== "crc" },
       { name: "business_name", label: "Business Name", type: "text", placeholder: "Company Name", isHidden: (vals) => vals.providerSlug === "crc" || vals.requestType === "consumer" },
       { name: "account_no", label: "Account Number (Optional)", type: "text", placeholder: "Account Number", isHidden: (vals) => vals.providerSlug === "crc" },
+      { name: "enquiry_reason", label: "Purpose of Enquiry", type: "select", placeholder: "Select purpose", options: FIRST_CENTRAL_ENQUIRY_REASONS.map((reason) => ({ label: reason, value: reason })), isHidden: (vals) => vals.providerSlug === "crc" },
       { name: "phone", label: "Phone Number", type: "phone", placeholder: "08012345678" },
       { name: "amount", label: "Amount (₦)", type: "number", readonly: true },
     ],
