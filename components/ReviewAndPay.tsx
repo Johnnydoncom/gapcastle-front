@@ -14,8 +14,18 @@ export interface ReviewAndPayProps {
   title: string;
   /** Resolved summary rows (label/value pairs). Build these in ServiceFlow before passing. */
   items: OrderSummaryItem[];
-  /** The total amount to charge */
+  /** The amount being bought: a plan's price, or the amount the customer typed */
   amount: number;
+  /**
+   * The server's price for this order (POST /transactions/quote), confirming
+   * the price shown is the price charged. Until it arrives the order is
+   * shown at `amount`.
+   */
+  quote?: { fee: number; total: number; cashback: number } | null;
+  /** Whether the quote is still loading */
+  quoteLoading?: boolean;
+  /** Why the order cannot be priced (e.g. the plan's price changed) */
+  quoteError?: string | null;
   /** Cashback percentage for this service (0–100). E.g. 1.5 means 1.5% */
   cashbackPct?: number;
   /** Wallet balance */
@@ -42,6 +52,9 @@ export function ReviewAndPay({
   title,
   items,
   amount,
+  quote,
+  quoteLoading = false,
+  quoteError = null,
   cashbackPct = 0,
   balance,
   gateways,
@@ -55,9 +68,11 @@ export function ReviewAndPay({
 }: ReviewAndPayProps) {
   const selectedGateway = gateways.find((g: any) => g.id === selectedGatewayId);
   const isWallet = selectedGateway?.slug === "wallet";
-  const insufficientBalance = isWallet && amount > balance;
+  const fee = quote?.fee ?? 0;
+  const total = quote?.total ?? amount;
+  const insufficientBalance = isWallet && total > balance;
 
-  const earnableCashback = cashbackPct > 0 ? amount * (cashbackPct / 100) : 0;
+  const earnableCashback = quote ? quote.cashback : cashbackPct > 0 ? amount * (cashbackPct / 100) : 0;
 
   return (
     <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
@@ -82,13 +97,19 @@ export function ReviewAndPay({
 
         <div className="mt-4 border-t pt-4 space-y-2">
           <SummaryRow label="Subtotal" value={formatNaira(amount)} />
-          <SummaryRow label="Fee" value={formatNaira(0)} />
+          <SummaryRow label="Fee" value={quoteLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : formatNaira(fee)} />
         </div>
 
         <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/5 px-4 py-3 ring-1 ring-primary/10">
           <span className="text-sm font-semibold text-muted-foreground">Total</span>
-          <span className="text-xl font-black tracking-tight text-primary">{formatNaira(amount)}</span>
+          <span className="text-xl font-black tracking-tight text-primary">{formatNaira(total)}</span>
         </div>
+
+        {quoteError && (
+          <p className="mt-3 rounded-xl bg-destructive/10 px-4 py-3 text-xs font-medium text-destructive">
+            {quoteError}
+          </p>
+        )}
 
         {/* Cashback earnable row */}
         {earnableCashback > 0 && (
@@ -120,7 +141,7 @@ export function ReviewAndPay({
           {gateways.map((gateway: any) => {
             const selected = selectedGatewayId === gateway.id;
             const gwIsWallet = gateway.slug === "wallet";
-            const lowBalance = gwIsWallet && amount > balance;
+            const lowBalance = gwIsWallet && total > balance;
 
             return (
               <button
@@ -174,7 +195,7 @@ export function ReviewAndPay({
           className="w-full h-14 text-base font-bold shadow-lg shadow-primary/20"
           size="lg"
           onClick={onPay}
-          disabled={submitting || !selectedGatewayId || insufficientBalance}
+          disabled={submitting || !selectedGatewayId || insufficientBalance || quoteLoading || !!quoteError}
         >
           {submitting ? (
             <>
@@ -182,7 +203,7 @@ export function ReviewAndPay({
               Processing…
             </>
           ) : (
-            `Pay ${formatNaira(amount)}`
+            `Pay ${formatNaira(total)}`
           )}
         </Button>
         {insufficientBalance && (

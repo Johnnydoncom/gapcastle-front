@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useWallet, usePaymentGateways } from "@/hooks/useGapcastle";
+import { useWallet, usePaymentGateways, usePriceQuote } from "@/hooks/useGapcastle";
 import { newIdempotencyKey } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,13 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
+  // Confirms on the review step that the price listed is still the price charged.
+  const { data: priceQuote, isFetching: quoteLoading, error: quoteError } = usePriceQuote(step === 2 && selectedProduct ? {
+    serviceSlug: "kyc",
+    providerId: zeehProvider?.id,
+    productId: selectedProduct.id,
+    amount: Number(selectedProduct.amount),
+  } : null);
 
   const [submitting, setSubmitting] = useState(false);
   const [resultTxn, setResultTxn] = useState<any>(null);
@@ -713,6 +720,9 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
               title="KYC Verification"
               items={buildSummaryItems()}
               amount={Number(selectedProduct.amount)}
+              quote={priceQuote}
+              quoteLoading={quoteLoading}
+              quoteError={quoteError ? quoteError.message : null}
               balance={balance}
               gateways={gateways}
               selectedGatewayId={selectedGatewayId}

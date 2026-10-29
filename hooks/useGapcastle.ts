@@ -243,6 +243,48 @@ export const useProducts = (providerId?: number) => {
   });
 };
 
+export interface PriceQuote {
+  /** The plan's price, or the amount the customer typed */
+  amount: number;
+  /** Any fee shown as its own line; a plan's margin is already in its price */
+  fee: number;
+  total: number;
+  cashback: number;
+}
+
+/**
+ * The server's price for an order, so the review screen shows exactly what
+ * the purchase will charge, or that a plan's price changed since it was listed.
+ */
+export const usePriceQuote = (order: {
+  serviceSlug?: string;
+  providerId?: number;
+  productId?: number | null;
+  amount?: number;
+} | null) => {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+
+  return useQuery<PriceQuote>({
+    queryKey: ["priceQuote", order?.serviceSlug, order?.providerId, order?.productId ?? null, order?.amount],
+    enabled: !!token && !!order?.serviceSlug && !!order?.providerId && Number(order?.amount) > 0,
+    queryFn: async () => {
+      const data = await fetchApi("/transactions/quote", token as string, {
+        method: "POST",
+        body: JSON.stringify({
+          bill_service_slug: order!.serviceSlug,
+          bill_provider_id: order!.providerId,
+          bill_product_id: order!.productId ?? null,
+          amount: Number(order!.amount),
+        }),
+      });
+      return data.data;
+    },
+    retry: false,
+    staleTime: 0,
+  });
+};
+
 export const usePaymentGateways = () => {
   const { data: session } = useSession();
   const token = session?.accessToken;

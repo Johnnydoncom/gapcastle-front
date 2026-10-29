@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useWallet, useProviders, useServiceApis, usePaymentGateways, useServices, useBillBeneficiaries, type BillApiOption, type BillBeneficiary } from "@/hooks/useGapcastle";
+import { useWallet, useProviders, useServiceApis, usePaymentGateways, useServices, useBillBeneficiaries, usePriceQuote, type BillApiOption, type BillBeneficiary } from "@/hooks/useGapcastle";
 import { newIdempotencyKey } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -131,6 +131,14 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const [verifiedData, setVerifiedData] = useState<any>(null);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [formValues, setFormValues] = useState<any>(null);
+  // Priced on the review step exactly as the purchase will be, so a plan whose
+  // price changed since it was listed is refused here rather than at payment.
+  const { data: priceQuote, isFetching: quoteLoading, error: quoteError } = usePriceQuote(step === 2 && formValues ? {
+    serviceSlug: groupSlug,
+    providerId: formValues.providerId,
+    productId: formValues.planId || null,
+    amount: Number(formValues.amount),
+  } : null);
   /** Human-readable status shown below the Pay button while the modal / poll is active */
   const [paymentStatusLabel, setPaymentStatusLabel] = useState<string | null>(null);
   /** Live status of the transaction on the receipt screen: processing | successful | failed */
@@ -317,7 +325,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
 
   const handlePay = async () => {
     const selectedGateway = gateways.find((g: any) => g.id === selectedGatewayId);
-    if (selectedGateway?.slug === 'wallet' && Number(formValues.amount) > balance) {
+    if (selectedGateway?.slug === 'wallet' && Number(priceQuote?.total ?? formValues.amount) > balance) {
       return toast.error("Insufficient wallet balance. Fund your wallet or select another payment method.");
     }
     if (payingRef.current) return;
@@ -880,6 +888,9 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
                   billApis.find((api) => api.slug === formValues.billApi)?.name),
               ]}
               amount={Number(formValues.amount)}
+              quote={priceQuote}
+              quoteLoading={quoteLoading}
+              quoteError={quoteError ? quoteError.message : null}
               cashbackPct={cashbackPct}
               balance={balance}
               gateways={gateways}
