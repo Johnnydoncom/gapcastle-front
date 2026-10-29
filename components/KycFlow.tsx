@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useWallet, usePaymentGateways, usePriceQuote } from "@/hooks/useGapcastle";
+import { useWallet, usePaymentGateways, usePriceQuote, useServices } from "@/hooks/useGapcastle";
 import { newIdempotencyKey } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
   const qc = useQueryClient();
   const { data: wallet } = useWallet(initialWallet);
   const { data: gateways = [] } = usePaymentGateways();
+  const { data: services = [], isSuccess: servicesLoaded } = useServices();
 
   // Data processing
   const zeehProvider = initialProviders.find(p => p.slug === "zeeh_africa" || p.slug.includes("zeeh"));
@@ -120,6 +121,18 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
 
   // Clean up polling on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  // /services lists only active services, so KYC missing from it has been
+  // deactivated by an admin. A finished transaction's result still shows.
+  if (servicesLoaded && !services.some((s: { slug: string }) => s.slug === "kyc") && step !== 3) {
+    return (
+      <div className="mx-auto max-w-md space-y-4 py-16 text-center">
+        <h1 className="text-xl font-bold">KYC Verification is unavailable</h1>
+        <p className="text-sm text-muted-foreground">This service is not available right now. Please check back soon.</p>
+        <Button variant="outline" onClick={() => router.push("/account/services")}>See available services</Button>
+      </div>
+    );
+  }
 
   const countryProducts = products.filter((p: any) => p.metadata?.country_name === selectedCountry);
 

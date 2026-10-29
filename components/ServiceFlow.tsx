@@ -40,7 +40,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   const { data: session } = useSession();
   const qc = useQueryClient();
   const { data: wallet } = useWallet(initialWallet);
-  const { data: services = [] } = useServices();
+  const { data: services = [], isSuccess: servicesLoaded } = useServices();
 
   const config = serviceRegistry[category];
   const groupSlug = config?.slug || category;
@@ -203,6 +203,18 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
 
   if (!config) {
     return <div className="p-8 text-center text-destructive font-semibold">Service configuration not found for: {category}</div>;
+  }
+
+  // /services lists only active services, so one missing from it has been
+  // deactivated by an admin. A finished transaction's result still shows.
+  if (servicesLoaded && !currentService && step !== 3) {
+    return (
+      <div className="mx-auto max-w-md space-y-4 py-16 text-center">
+        <h1 className="text-xl font-bold">{overrideTitle || config.title} is unavailable</h1>
+        <p className="text-sm text-muted-foreground">This service is not available right now. Please check back soon.</p>
+        <Button variant="outline" onClick={() => router.push("/account/services")}>See available services</Button>
+      </div>
+    );
   }
 
   const balance = Number(wallet?.balance ?? 0);

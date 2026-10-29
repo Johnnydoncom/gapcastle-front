@@ -12,7 +12,7 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { useRewardsSummary } from "@/hooks/useGapcastle";
+import { useRewardsSummary, useServices } from "@/hooks/useGapcastle";
 import { formatNaira } from "@/lib/format";
 
 const mainNav = [
@@ -22,16 +22,18 @@ const mainNav = [
   { to: "/account/rewards", label: "Rewards", icon: Gift },
 ];
 
-const servicesNav = [
-  { to: "/account/airtime", label: "Buy Airtime", icon: Phone, color: "from-blue-400 to-blue-600" },
-  { to: "/account/data", label: "Mobile Data", icon: Wifi, color: "from-emerald-400 to-emerald-600" },
-  { to: "/account/electricity", label: "Electricity", icon: Lightbulb, color: "from-amber-400 to-orange-500" },
-  { to: "/account/cable", label: "PayTV", icon: Tv, color: "from-purple-400 to-purple-600" },
-  { to: "/account/internet", label: "Internet", icon: Wifi, color: "from-blue-400 to-blue-600" },
-  { to: "/account/education", label: "Educational", icon: GraduationCap, color: "from-pink-400 to-rose-500" },
-  { to: "/account/insurance", label: "Insurance", icon: ShieldCheck, color: "from-indigo-400 to-indigo-600" },
-  { to: "/account/services", label: "All Services", icon: Grid3x3, color: "from-slate-400 to-slate-600" },
+/** Shortcuts to individual services; each shows only while its backend `slug` is active. */
+const serviceShortcuts = [
+  { slug: "airtime", to: "/account/airtime", label: "Buy Airtime", icon: Phone, color: "from-blue-400 to-blue-600" },
+  { slug: "data", to: "/account/data", label: "Mobile Data", icon: Wifi, color: "from-emerald-400 to-emerald-600" },
+  { slug: "electricity", to: "/account/electricity", label: "Electricity", icon: Lightbulb, color: "from-amber-400 to-orange-500" },
+  { slug: "cable", to: "/account/cable", label: "PayTV", icon: Tv, color: "from-purple-400 to-purple-600" },
+  { slug: "internet", to: "/account/internet", label: "Internet", icon: Wifi, color: "from-blue-400 to-blue-600" },
+  { slug: "education", to: "/account/education", label: "Educational", icon: GraduationCap, color: "from-pink-400 to-rose-500" },
+  { slug: "insurance", to: "/account/insurance", label: "Insurance", icon: ShieldCheck, color: "from-indigo-400 to-indigo-600" },
 ];
+
+const allServicesNav = { to: "/account/services", label: "All Services", icon: Grid3x3, color: "from-slate-400 to-slate-600" };
 
 const generalNav = [
   { to: "/account/support", label: "Support Tickets", icon: LifeBuoy },
@@ -58,6 +60,12 @@ export function AccountShell({ children, user }: AccountShellProps) {
 
   // The bonus is whatever an admin has set; hide the promo while it is paused.
   const { data: rewards } = useRewardsSummary();
+
+  // Shortcuts stay hidden until the active list loads, so a deactivated
+  // service never flashes into the menu.
+  const { data: activeServices = [] } = useServices();
+  const activeSlugs = new Set(activeServices.map((s: { slug: string }) => s.slug));
+  const servicesNav = [...serviceShortcuts.filter((item) => activeSlugs.has(item.slug)), allServicesNav];
   const referralProgram = rewards?.program;
   const showReferralPromo = !referralProgram || (referralProgram.enabled && referralProgram.reward_amount > 0);
 

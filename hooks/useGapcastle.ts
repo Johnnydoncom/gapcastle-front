@@ -155,7 +155,7 @@ export const useServices = () => {
       const services = data.data || data;
       return Array.isArray(services) ? services : [];
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes — backend caches for 24h, refetch on remount at most every 5 min
+    staleTime: 5 * 60 * 1000, // 5 minutes — the backend drops its cache whenever an admin changes a service
   });
 };
 
