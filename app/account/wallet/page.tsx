@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useWallet, useTransactions } from "@/hooks/useGapcastle";
+import { useKycStatus, useWallet, useTransactions } from "@/hooks/useGapcastle";
+import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatNaira, formatDate } from "@/lib/format";
-import { Plus, ArrowDownToLine, Loader2, Landmark, Check, ChevronsUpDown, Save, AlertCircle } from "lucide-react";
+import { Plus, ArrowDownToLine, Loader2, Landmark, Check, ChevronsUpDown, Save, AlertCircle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -16,10 +17,14 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { openGatewayModal } from "@/lib/gateway-sdk";
+import { TransactionPinDialog } from "@/components/TransactionPinDialog";
+import { TransactionPinError, assertPinAccepted } from "@/lib/transaction-pin";
 
 export default function WalletPage() {
   const { data: wallet } = useWallet();
   const { data: txns } = useTransactions(20);
+  // Only BVN-verified users may withdraw; the API enforces it as well.
+  const { data: kyc } = useKycStatus();
   const qc = useQueryClient();
   const searchParams = useSearchParams();
 
@@ -43,8 +48,9 @@ export default function WalletPage() {
   const [withdrawUnavailable, setWithdrawUnavailable] = useState<string | null>(null);
   /** Set when the resolved account is not in the user's own name. */
   const [accountMismatch, setAccountMismatch] = useState<string | null>(null);
-  /** The withdrawal gateway's fee percentage, returned alongside the bank list. */
-  const [withdrawalGatewayFee, setWithdrawalGatewayFee] = useState<number>(0);
+  /** The withdrawal gateway's flat fee bands, returned alongside the bank list. */
+  const [withdrawalFeeTiers, setWithdrawalFeeTiers] = useState<{ up_to: number | null; fee: number }[]>([]);
+  const [pinOpen, setPinOpen] = useState(false);
 
   /*
    * charge_fee is a percentage of the amount, so the fee only exists once an
@@ -65,8 +71,18 @@ export default function WalletPage() {
   // Blocks a second top-up starting before the first has re-rendered the button.
   const fundingRef = useRef(false);
 
-  const withdrawalFeePct = Number(withdrawalGatewayFee ?? 0);
-  const withdrawalFee = feeFor(amount, withdrawalFeePct);
+  /*
+   * Withdrawals cost a flat fee by amount band (each band covers amounts up to
+   * and including up_to; the last is open). Mirrors
+   * PaymentGateway::withdrawalFeeFor() — the API's figure is what is charged.
+   */
+  const withdrawalFeeFor = (amount: number) => {
+    if (!amount || amount <= 0 || withdrawalFeeTiers.length === 0) return 0;
+    const tier = withdrawalFeeTiers.find((t) => t.up_to === null || amount <= Number(t.up_to))
+      ?? withdrawalFeeTiers[withdrawalFeeTiers.length - 1];
+    return Number(tier.fee) || 0;
+  };
+  const withdrawalFee = withdrawalFeeFor(amount);
   const [bankCode, setBankCode] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [fetchingBanks, setFetchingBanks] = useState(false);
@@ -251,7 +267,7 @@ export default function WalletPage() {
       // take the whole page down rather than degrade.
       if (res.ok && Array.isArray(data?.data)) {
         setBanks(data.data);
-        setWithdrawalGatewayFee(Number(data?.fee_percentage) || 0);
+        setWithdrawalFeeTiers(Array.isArray(data?.fee_tiers) ? data.fee_tiers : []);
         setWithdrawUnavailable(null);
         return;
       }
@@ -368,13 +384,22 @@ export default function WalletPage() {
     }
   };
 
-  const withdrawWallet = async () => {
+  /**
+   * Without a PIN this validates the form and opens the PIN dialog, which
+   * calls back with one. A PIN refusal is rethrown for the dialog to show.
+   */
+  const withdrawWallet = async (pin?: string) => {
     if (amount < 100) return toast.error("Minimum withdrawal is ₦100");
     if (!bankCode) return toast.error("Please select a bank");
     if (!accountNumber || accountNumber.length < 10) return toast.error("Please enter a valid account number");
     if (!accountName) return toast.error("Please ensure your account is validated first");
     // Belt and braces alongside the disabled button; the API enforces this too.
     if (accountMismatch) return toast.error(accountMismatch);
+
+    if (!pin) {
+      setPinOpen(true);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -387,13 +412,14 @@ export default function WalletPage() {
           "Content-Type": "application/json",
           "Accept": "application/json"
         },
-        body: JSON.stringify({ amount, account_number: accountNumber, bank_code: bankCode })
+        body: JSON.stringify({ amount, account_number: accountNumber, bank_code: bankCode, transaction_pin: pin })
       });
       const data = await res.json();
       if (res.status === 401) {
         if (typeof window !== "undefined") signOut({ callbackUrl: "/login" });
         throw new Error("Session expired. Please log in again.");
       }
+      assertPinAccepted(data);
       if (!res.ok) throw new Error(data.message || "Failed to initiate withdrawal");
       
       toast.success(data.message || "Withdrawal initiated successfully");
@@ -422,6 +448,7 @@ export default function WalletPage() {
       setSaveBeneficiary(false);
       setActiveWithdrawTab("new");
     } catch (error: any) {
+      if (error instanceof TransactionPinError) throw error;
       toast.error(error.message);
     } finally {
       setLoading(false);
@@ -563,6 +590,26 @@ export default function WalletPage() {
       <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Withdraw Funds</DialogTitle></DialogHeader>
+          {!kyc ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+          ) : kyc.enabled && kyc.status !== "verified" ? (
+            <div className="space-y-4 py-2 text-center">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <ShieldCheck className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="font-semibold">Verify your identity to withdraw</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {kyc.status === "pending"
+                    ? "Your BVN verification is waiting for your approval on the NIBSS page."
+                    : "For your security, only BVN-verified accounts can withdraw. It takes about a minute."}
+                </p>
+              </div>
+              <Button asChild className="w-full">
+                <Link href="/account/settings#identity">{kyc.status === "pending" ? "Finish verification" : "Verify my BVN"}</Link>
+              </Button>
+            </div>
+          ) : (
           <Tabs value={activeWithdrawTab} onValueChange={setActiveWithdrawTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="new">New Account</TabsTrigger>
@@ -682,7 +729,7 @@ export default function WalletPage() {
                       <span>You receive</span><span>{formatNaira(amount)}</span>
                     </div>
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Processing fee{withdrawalFeePct > 0 ? ` (${withdrawalFeePct}%)` : ""}</span>
+                      <span>Transfer fee</span>
                       <span>{formatNaira(withdrawalFee)}</span>
                     </div>
                     <div className="flex justify-between border-t pt-1 font-semibold">
@@ -691,15 +738,24 @@ export default function WalletPage() {
                   </div>
                 )}
 
-                <Button className="w-full mt-2" onClick={withdrawWallet} disabled={loading || amount <= 0 || !bankCode || !accountNumber || accountNumber.length !== 10 || !accountName || !!accountMismatch}>
+                <Button className="w-full mt-2" onClick={() => withdrawWallet()} disabled={loading || amount <= 0 || !bankCode || !accountNumber || accountNumber.length !== 10 || !accountName || !!accountMismatch}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {loading ? "Processing..." : `Withdraw ${amount ? formatNaira(amount) : ""}`}
                 </Button>
               </div>
             </TabsContent>
           </Tabs>
+          )}
         </DialogContent>
       </Dialog>
+
+      <TransactionPinDialog
+        open={pinOpen}
+        onOpenChange={setPinOpen}
+        title="Confirm withdrawal"
+        description={`${formatNaira(amount + withdrawalFee)} will leave your wallet: ${formatNaira(amount)} to ${accountName}, plus a ${formatNaira(withdrawalFee)} transfer fee.`}
+        onConfirm={(pin) => withdrawWallet(pin)}
+      />
     </div>
   );
 }

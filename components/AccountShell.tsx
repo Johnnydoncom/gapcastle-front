@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Logo } from "@/components/Logo";
+import { SessionTimeout } from "@/components/SessionTimeout";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Wallet, Grid3x3, Receipt, Gift, Settings,
@@ -148,6 +149,7 @@ export function AccountShell({ children, user }: AccountShellProps) {
 
   return (
     <div className="flex min-h-screen bg-slate-50/50">
+      <SessionTimeout />
 
       {/* ═══════════ Desktop Sidebar ═══════════ */}
       <aside className="hidden w-[280px] flex-col md:flex relative overflow-hidden bg-gradient-to-b from-[#0B0F19] to-[#111827]">

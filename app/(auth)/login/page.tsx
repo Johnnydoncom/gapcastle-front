@@ -1,13 +1,26 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/Logo";
 import { toast } from "sonner";
+import { IDLE_TIMEOUT_MS } from "@/lib/session-policy";
+
+const SIGNED_OUT_NOTICES: Record<string, string> = {
+  idle: `You were signed out after ${IDLE_TIMEOUT_MS / 60_000} minutes of inactivity. Please sign in again.`,
+  expired: "Your session has expired. Please sign in again.",
+};
+
+/** Why the user was sent here, when the session ended on its own. */
+function SignedOutNotice() {
+  const notice = SIGNED_OUT_NOTICES[useSearchParams().get("reason") ?? ""];
+  if (!notice) return null;
+  return <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{notice}</p>;
+}
 
 export default function Login() {
   const router = useRouter();
@@ -40,6 +53,8 @@ export default function Login() {
         <div className="rounded-2xl border bg-card p-8 shadow-card">
           <h1 className="text-2xl font-bold">Welcome back</h1>
           <p className="mt-1 text-sm text-muted-foreground">Sign in to your GapCastle account</p>
+          {/* useSearchParams needs a Suspense boundary on a prerendered page. */}
+          <Suspense fallback={null}><SignedOutNotice /></Suspense>
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

@@ -83,6 +83,33 @@ export const useWallet = (initialData?: any) => {
   });
 };
 
+export interface KycStatus {
+  /** Admin switch. Off: nobody can verify, and withdrawals do not require it. */
+  enabled: boolean;
+  status: "unverified" | "pending" | "verified" | "failed";
+  verified_at: string | null;
+  bvn_last4: string | null;
+  /** The name on the verified BVN. */
+  verified_name: string | null;
+  failure_reason: string | null;
+}
+
+/** BVN verification state. Only verified users may withdraw. */
+export const useKycStatus = () => {
+  const { data: session } = useSession();
+  const user = session?.user;
+  const token = session?.accessToken;
+
+  return useQuery<KycStatus>({
+    queryKey: ["kyc", user?.id],
+    enabled: !!user && !!token,
+    queryFn: async () => {
+      const data = await fetchApi("/kyc", token as string);
+      return data.data || data;
+    },
+  });
+};
+
 export const useProfile = () => {
   const { data: session } = useSession();
   const user = session?.user;

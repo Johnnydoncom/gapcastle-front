@@ -1,22 +1,35 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useProfile } from "@/hooks/useGapcastle";
+import { useKycStatus, useProfile } from "@/hooks/useGapcastle";
+import { IdentityVerificationCard } from "@/components/IdentityVerificationCard";
 import { useSession, signOut } from "next-auth/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { KeyRound, Loader2 } from "lucide-react";
+import { TransactionPinDialog } from "@/components/TransactionPinDialog";
+import { PinStatus, pinRequest } from "@/lib/transaction-pin";
 
 export default function Settings() {
   const { data: session } = useSession();
   const user = session?.user;
   const { data: profile } = useProfile();
+  // A BVN-verified name is locked: withdrawals only reach accounts in that name.
+  const nameLocked = useKycStatus().data?.status === "verified";
   const qc = useQueryClient();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
+  const token = session?.accessToken;
+  const [pinDialog, setPinDialog] = useState<"closed" | "manage" | "reset">("closed");
+
+  const { data: pinStatus, refetch: refetchPinStatus } = useQuery({
+    queryKey: ["transaction-pin", user?.id],
+    enabled: !!token,
+    queryFn: () => pinRequest<PinStatus>(token as string, ""),
+  });
 
   useEffect(() => {
     if (profile) { setFullName(profile.name ?? ""); setPhone(profile.phone ?? ""); }
@@ -25,7 +38,7 @@ export default function Settings() {
   const save = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Session expired. Please log in again.");
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
       // The user route is typically /api/user, not /api/v1/user based on our setup
       const res = await fetch(`${API_URL.replace("/v1", "")}/user`, {
@@ -62,13 +75,60 @@ export default function Settings() {
       </div>
       <div className="rounded-2xl border bg-card p-6 shadow-card space-y-4">
         <div className="space-y-2"><Label>Email</Label><Input value={user?.email ?? ""} disabled /></div>
-        <div className="space-y-2"><Label>Full name</Label><Input value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>
+        <div className="space-y-2">
+          <Label>Full name</Label>
+          <Input value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={nameLocked} />
+          <p className="text-xs text-muted-foreground">
+            {nameLocked
+              ? "Verified with your BVN. Contact support if it needs correcting."
+              : "Use your name exactly as it appears on your BVN."}
+          </p>
+        </div>
         <div className="space-y-2"><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
         <Button onClick={save} disabled={loading}>
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {loading ? "Saving…" : "Save changes"}
         </Button>
       </div>
+
+      <IdentityVerificationCard />
+
+      <div className="rounded-2xl border bg-card p-6 shadow-card space-y-4">
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <KeyRound className="h-4 w-4" />
+          </span>
+          <div>
+            <h2 className="font-semibold">Transaction PIN</h2>
+            <p className="text-sm text-muted-foreground">
+              {pinStatus?.has_pin
+                ? "Your 4-digit PIN confirms withdrawals and wallet payments."
+                : "Create a 4-digit PIN to confirm withdrawals and wallet payments."}
+            </p>
+            {pinStatus?.locked_until && (
+              <p className="mt-1 text-sm text-destructive">Locked after too many incorrect attempts. Reset it to unlock now.</p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {pinStatus?.has_pin ? (
+            <>
+              <Button variant="outline" onClick={() => setPinDialog("manage")}>Change PIN</Button>
+              <Button variant="ghost" onClick={() => setPinDialog("reset")}>Forgot PIN?</Button>
+            </>
+          ) : (
+            <Button onClick={() => setPinDialog("manage")} disabled={!pinStatus}>Create PIN</Button>
+          )}
+        </div>
+      </div>
+
+      <TransactionPinDialog
+        open={pinDialog !== "closed"}
+        onOpenChange={(open) => { if (!open) setPinDialog("closed"); }}
+        mode="manage"
+        startWithReset={pinDialog === "reset"}
+        onManaged={() => refetchPinStatus()}
+      />
     </div>
   );
 }

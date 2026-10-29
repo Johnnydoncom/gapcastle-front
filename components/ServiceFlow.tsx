@@ -21,6 +21,8 @@ import { DynamicFormFields } from "@/components/DynamicFormFields";
 import { BeneficiarySelect } from "@/components/BeneficiarySelect";
 import { ReviewAndPay, type OrderSummaryItem } from "@/components/ReviewAndPay";
 import { openGatewayModal } from "@/lib/gateway-sdk";
+import { TransactionPinDialog } from "@/components/TransactionPinDialog";
+import { TransactionPinError, assertPinAccepted } from "@/lib/transaction-pin";
 import { getDeliveryDisplayInfo, getDeliveryColorClasses, formatTokenDisplay } from "@/lib/delivery-display";
 
 const deliveryIcons = { Zap, GraduationCap, Tv, Smartphone, ShieldCheck, Globe, Droplets, Flame, KeyRound } as const;
@@ -197,6 +199,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
 
   // Blocks a second payment starting before the first has re-rendered the button.
   const payingRef = useRef(false);
+  const [pinOpen, setPinOpen] = useState(false);
 
   // Clean up polling on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
@@ -335,10 +338,18 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
     }, 5000);
   };
 
-  const handlePay = async () => {
+  /**
+   * A wallet payment first opens the PIN dialog, which calls back here with
+   * the PIN. A PIN refusal is rethrown for the dialog to show.
+   */
+  const handlePay = async (pin?: string) => {
     const selectedGateway = gateways.find((g: any) => g.id === selectedGatewayId);
     if (selectedGateway?.slug === 'wallet' && Number(priceQuote?.total ?? formValues.amount) > balance) {
       return toast.error("Insufficient wallet balance. Fund your wallet or select another payment method.");
+    }
+    if (selectedGateway?.slug === 'wallet' && !pin) {
+      setPinOpen(true);
+      return;
     }
     if (payingRef.current) return;
     payingRef.current = true;
@@ -369,6 +380,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         // The bill API the customer chose (Credit Check) processes the bill.
         ...(usesApiSelection && selectedBillApi ? { bill_api_slug: selectedBillApi } : {}),
         payment_gateway_id: selectedGateway?.slug === 'wallet' ? null : selectedGatewayId,
+        transaction_pin: pin,
         // An already-saved recipient is always refreshed; a new one only if
         // the customer left "Save as beneficiary" on.
         save_beneficiary: matchedBeneficiary ? true : saveBeneficiary,
@@ -390,6 +402,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         if (typeof window !== "undefined") signOut({ callbackUrl: "/login" });
         throw new Error("Session expired.");
       }
+      assertPinAccepted(result);
       if (!res.ok) throw new Error(result.message || "Payment failed");
 
       // ── Step 2a: wallet pay — done immediately ─────────────────────────────
@@ -502,9 +515,10 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
       }
 
     } catch (error: any) {
-      toast.error(error.message);
       setSubmitting(false);
       setPaymentStatusLabel(null);
+      if (error instanceof TransactionPinError) throw error;
+      toast.error(error.message);
     } finally {
       payingRef.current = false;
     }
@@ -909,7 +923,7 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
               selectedGatewayId={selectedGatewayId}
               onSelectGateway={setSelectedGatewayId}
               onEdit={() => setStep(1)}
-              onPay={handlePay}
+              onPay={() => handlePay()}
               submitting={submitting}
               paymentStatusLabel={paymentStatusLabel}
               beforePayment={beneficiaryData?.supported && !matchedBeneficiary ? (
@@ -936,6 +950,14 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
           )}
         </div>
       </div>
+
+      <TransactionPinDialog
+        open={pinOpen}
+        onOpenChange={setPinOpen}
+        title="Confirm payment"
+        description="Enter your 4-digit PIN to pay from your wallet."
+        onConfirm={(pin) => handlePay(pin)}
+      />
     </div>
   );
 }

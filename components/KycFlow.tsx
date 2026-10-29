@@ -16,6 +16,8 @@ import { useTransactionDetail } from "@/hooks/useGapcastle";
 import { TransactionReport } from "@/components/TransactionReport";
 import { ReviewAndPay, type OrderSummaryItem } from "@/components/ReviewAndPay";
 import { openGatewayModal } from "@/lib/gateway-sdk";
+import { TransactionPinDialog } from "@/components/TransactionPinDialog";
+import { TransactionPinError, assertPinAccepted } from "@/lib/transaction-pin";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { CameraCapture } from "@/components/ui/CameraCapture";
 
@@ -118,6 +120,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
 
   // Blocks a second payment starting before the first has re-rendered the button.
   const payingRef = useRef(false);
+  const [pinOpen, setPinOpen] = useState(false);
 
   // Clean up polling on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
@@ -235,10 +238,18 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
     }, 5000);
   };
 
-  const handlePay = async () => {
+  /**
+   * A wallet payment first opens the PIN dialog, which calls back here with
+   * the PIN. A PIN refusal is rethrown for the dialog to show.
+   */
+  const handlePay = async (pin?: string) => {
     const selectedGateway = gateways.find((g: any) => g.id === selectedGatewayId);
     if (selectedGateway?.slug === 'wallet' && Number(selectedProduct.amount) > balance) {
       return toast.error("Insufficient wallet balance. Fund your wallet or select another payment method.");
+    }
+    if (selectedGateway?.slug === 'wallet' && !pin) {
+      setPinOpen(true);
+      return;
     }
     if (payingRef.current) return;
     payingRef.current = true;
@@ -262,6 +273,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
           endpoint: selectedProduct.metadata?.endpoint,
         },
         payment_gateway_id: selectedGateway?.slug === 'wallet' ? null : selectedGatewayId,
+        transaction_pin: pin,
         idempotency_key: newIdempotencyKey(),
       };
 
@@ -280,6 +292,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
         if (typeof window !== "undefined") signOut({ callbackUrl: "/login" });
         throw new Error("Session expired.");
       }
+      assertPinAccepted(result);
       if (!res.ok) throw new Error(result.message || "Payment failed");
 
       // ── Step 2a: wallet pay — done immediately ─────────────────────────────
@@ -371,9 +384,10 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
       }
 
     } catch (error: any) {
-      toast.error(error.message);
       setSubmitting(false);
       setPaymentStatusLabel(null);
+      if (error instanceof TransactionPinError) throw error;
+      toast.error(error.message);
     } finally {
       payingRef.current = false;
     }
@@ -741,13 +755,21 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
               selectedGatewayId={selectedGatewayId}
               onSelectGateway={setSelectedGatewayId}
               onEdit={() => setStep(1)}
-              onPay={handlePay}
+              onPay={() => handlePay()}
               submitting={submitting}
               paymentStatusLabel={paymentStatusLabel}
             />
           )}
         </div>
       </div>
+
+      <TransactionPinDialog
+        open={pinOpen}
+        onOpenChange={setPinOpen}
+        title="Confirm payment"
+        description="Enter your 4-digit PIN to pay from your wallet."
+        onConfirm={(pin) => handlePay(pin)}
+      />
 
       {/* Camera Capture Dialog */}
       <Dialog open={!!activeCameraField} onOpenChange={(open) => !open && setActiveCameraField(null)}>
