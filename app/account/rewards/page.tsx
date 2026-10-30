@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { formatNaira, formatDate } from "@/lib/format";
 import { toast } from "sonner";
+import { TransactionPinDialog } from "@/components/TransactionPinDialog";
+import { TransactionPinError } from "@/lib/transaction-pin";
 import {
   Gift, Copy, Check, Loader2, Share2, Users, UserPlus, Wallet, ArrowRightLeft,
   Coins, ChevronLeft, ChevronRight, History, BadgeCheck, Clock, Link2, PauseCircle,
@@ -104,6 +106,7 @@ function WithdrawDialog({ open, onOpenChange, balance }: { open: boolean; onOpen
   const withdraw = useWithdrawCashback();
   // Remounted on each open (see `key` below), so it starts at the full balance.
   const [amount, setAmount] = useState(balance >= 1 ? balance.toFixed(2) : "");
+  const [pinOpen, setPinOpen] = useState(false);
 
   const value = Number(amount);
   const error =
@@ -116,14 +119,19 @@ function WithdrawDialog({ open, onOpenChange, balance }: { open: boolean; onOpen
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (amount === "" || error) return;
+    setPinOpen(true);
+  };
 
-    withdraw.mutate(value, {
-      onSuccess: () => {
-        toast.success(`${formatNaira(value)} moved to your wallet`);
-        onOpenChange(false);
-      },
-      onError: (err: Error) => toast.error(err.message || "Could not move your rewards. Please try again."),
-    });
+  /** A PIN refusal is rethrown for the dialog to show. */
+  const moveToWallet = async (pin: string) => {
+    try {
+      await withdraw.mutateAsync({ amount: value, pin });
+      toast.success(`${formatNaira(value)} moved to your wallet`);
+      onOpenChange(false);
+    } catch (err) {
+      if (err instanceof TransactionPinError) throw err;
+      toast.error((err as Error).message || "Could not move your rewards. Please try again.");
+    }
   };
 
   return (
@@ -167,6 +175,14 @@ function WithdrawDialog({ open, onOpenChange, balance }: { open: boolean; onOpen
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <TransactionPinDialog
+        open={pinOpen}
+        onOpenChange={setPinOpen}
+        title="Confirm transfer"
+        description={`${formatNaira(value)} will move from your rewards to your wallet.`}
+        onConfirm={moveToWallet}
+      />
     </Dialog>
   );
 }

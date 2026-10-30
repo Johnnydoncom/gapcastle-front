@@ -7,6 +7,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { KeyRound, Loader2 } from "lucide-react";
 import { TransactionPinDialog } from "@/components/TransactionPinDialog";
@@ -16,12 +20,16 @@ export default function Settings() {
   const { data: session } = useSession();
   const user = session?.user;
   const { data: profile } = useProfile();
-  // A BVN-verified name is locked: withdrawals only reach accounts in that name.
-  const nameLocked = useKycStatus().data?.status === "verified";
+  const bvnVerified = useKycStatus().data?.status === "verified";
+  // Withdrawals only reach accounts in this name, so the API allows a single
+  // correction before the first withdrawal. Anything further goes to support.
+  const nameLocked = bvnVerified || !!profile?.name_locked;
+  const holdHours = profile?.name_change_hold_hours ?? 72;
   const qc = useQueryClient();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirmNameOpen, setConfirmNameOpen] = useState(false);
   const token = session?.accessToken;
   const [pinDialog, setPinDialog] = useState<"closed" | "manage" | "reset">("closed");
 
@@ -67,6 +75,15 @@ export default function Settings() {
     }
   };
 
+  /** A new name spends the one correction, so it is confirmed first. */
+  const requestSave = () => {
+    if (profile && fullName.trim() !== profile.name) {
+      setConfirmNameOpen(true);
+      return;
+    }
+    save();
+  };
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -79,17 +96,35 @@ export default function Settings() {
           <Label>Full name</Label>
           <Input value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={nameLocked} />
           <p className="text-xs text-muted-foreground">
-            {nameLocked
+            {bvnVerified
               ? "Verified with your BVN. Contact support if it needs correcting."
-              : "Use your name exactly as it appears on your BVN."}
+              : nameLocked
+                ? "Your name can no longer be changed here. Contact support if it needs correcting."
+                : `Use your name exactly as it appears on your bank account. You can correct it once, and withdrawals pause for ${holdHours} hours afterwards.`}
           </p>
         </div>
         <div className="space-y-2"><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-        <Button onClick={save} disabled={loading}>
+        <Button onClick={requestSave} disabled={loading}>
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {loading ? "Saving…" : "Save changes"}
         </Button>
       </div>
+
+      <AlertDialog open={confirmNameOpen} onOpenChange={setConfirmNameOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change your name to {fullName.trim()}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You can only do this once, and after that only support can change it.
+              Withdrawals will pause for {holdHours} hours, and you can only withdraw to an account in this name.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Go back</AlertDialogCancel>
+            <AlertDialogAction onClick={save}>Change my name</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <IdentityVerificationCard />
 

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useKycStatus, useWallet, useTransactions } from "@/hooks/useGapcastle";
+import { useKycStatus, useProfile, useWallet, useTransactions } from "@/hooks/useGapcastle";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,6 +25,9 @@ export default function WalletPage() {
   const { data: txns } = useTransactions(20);
   // Only BVN-verified users may withdraw; the API enforces it as well.
   const { data: kyc } = useKycStatus();
+  // Withdrawals pause after a name change; the API enforces it as well.
+  const { data: profile } = useProfile();
+  const withdrawalHoldUntil: string | null = profile?.withdrawal_hold_until ?? null;
   const qc = useQueryClient();
   const searchParams = useSearchParams();
 
@@ -608,6 +611,18 @@ export default function WalletPage() {
               <Button asChild className="w-full">
                 <Link href="/account/settings#identity">{kyc.status === "pending" ? "Finish verification" : "Verify my BVN"}</Link>
               </Button>
+            </div>
+          ) : withdrawalHoldUntil ? (
+            <div className="space-y-4 py-2 text-center">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <ShieldCheck className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="font-semibold">Withdrawals are paused</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  For your security, withdrawals are paused after a name change. You can withdraw again from {new Date(withdrawalHoldUntil).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}.
+                </p>
+              </div>
             </div>
           ) : (
           <Tabs value={activeWithdrawTab} onValueChange={setActiveWithdrawTab} className="w-full">

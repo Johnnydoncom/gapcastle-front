@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession, signOut } from "next-auth/react";
+import { assertPinAccepted } from "@/lib/transaction-pin";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
 
@@ -473,11 +474,29 @@ export const useWithdrawCashback = () => {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (amount: number) =>
-      fetchApi("/wallet/withdraw-cashback", token as string, {
+    mutationFn: async ({ amount, pin }: { amount: number; pin: string }) => {
+      const res = await fetch(`${API_URL}/wallet/withdraw-cashback`, {
         method: "POST",
-        body: JSON.stringify({ amount }),
-      }),
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ amount, transaction_pin: pin }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.status === 401) {
+        if (typeof window !== "undefined") signOut({ callbackUrl: "/login" });
+        throw new Error("Session expired. Please log in again.");
+      }
+      // A PIN refusal is rethrown for the PIN dialog to show.
+      assertPinAccepted(data);
+      if (!res.ok) {
+        const firstFieldError = data?.errors ? (Object.values(data.errors).flat()[0] as string | undefined) : undefined;
+        throw new Error(firstFieldError || data?.message || "Could not move your rewards. Please try again.");
+      }
+      return data;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rewards"] });
       qc.invalidateQueries({ queryKey: ["wallet"] });
