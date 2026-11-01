@@ -7,7 +7,7 @@ import { SessionTimeout } from "@/components/SessionTimeout";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Wallet, Grid3x3, Receipt, Gift, Settings,
-  LogOut, Menu, X, LifeBuoy, Phone, Wifi, Lightbulb, Tv,
+  LogOut, Menu, LifeBuoy, Phone, Wifi, Lightbulb, Tv, Home,
   GraduationCap, ShieldCheck, Sparkles, ChevronRight, Send
 } from "lucide-react";
 import { useState } from "react";
@@ -23,6 +23,15 @@ const mainNav = [
   { to: "/account/transactions", label: "Transactions", icon: Receipt },
   { to: "/account/rewards", label: "Rewards", icon: Gift },
 ];
+
+/** The phone tab bar. "More" follows these and opens the full menu. */
+const tabBarNav = [
+  { to: "/account", label: "Home", icon: Home },
+  { to: "/account/wallet", label: "Wallet", icon: Wallet },
+  { to: "/account/wallet/transfer", label: "Transfer", icon: Send },
+  { to: "/account/transactions", label: "History", icon: Receipt },
+];
+const tabBarItem = "flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11px] font-medium transition-colors active:scale-95";
 
 /** Shortcuts to individual services; each shows only while its backend `slug` is active. */
 const serviceShortcuts = [
@@ -255,17 +264,17 @@ export function AccountShell({ children, user }: AccountShellProps) {
       </aside>
 
       {/* ═══════════ Mobile Header & Content ═══════════ */}
-      <div className="flex flex-1 flex-col overflow-hidden relative">
-        <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-slate-200/60 bg-white/80 backdrop-blur-xl px-4 md:hidden sticky top-0 z-30 shadow-sm">
+      {/* min-w-0, not overflow-hidden: that would stop the header sticking. */}
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200/60 bg-white/90 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl box-content md:hidden">
           <Logo />
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold text-xs shadow-md">
-              {userInitial}
-            </div>
-            <Button size="icon" variant="ghost" className="h-10 w-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700" onClick={() => setMobileOpen(!mobileOpen)}>
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
-          </div>
+          <Link
+            href="/account/settings"
+            aria-label="Account settings"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold text-white shadow-md"
+          >
+            {userInitial}
+          </Link>
         </header>
 
         {/* Mobile Navigation Drawer */}
@@ -302,11 +311,36 @@ export function AccountShell({ children, user }: AccountShellProps) {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+        {/* Bottom padding keeps the last row clear of the tab bar on phones. */}
+        <main className="flex-1 overflow-y-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-8 custom-scrollbar">
           <div className="mx-auto max-w-7xl">
             {children}
           </div>
         </main>
+
+        {/* ═══════════ Mobile Tab Bar ═══════════ */}
+        <nav
+          aria-label="Main"
+          className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200/70 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_-8px_rgba(15,23,42,0.12)] backdrop-blur-xl md:hidden"
+        >
+          {tabBarNav.map((item) => {
+            const Icon = item.icon;
+            const active = isPathActive(item.to);
+
+            return (
+              <Link key={item.to} href={item.to} aria-current={active ? "page" : undefined} className={cn(tabBarItem, active ? "text-primary" : "text-slate-500")}>
+                <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors", active && "bg-primary/10")}>
+                  <Icon className="h-5 w-5" />
+                </span>
+                {item.label}
+              </Link>
+            );
+          })}
+          <button type="button" onClick={() => setMobileOpen(true)} className={cn(tabBarItem, mobileOpen ? "text-primary" : "text-slate-500")}>
+            <span className="flex h-7 w-12 items-center justify-center"><Menu className="h-5 w-5" /></span>
+            More
+          </button>
+        </nav>
       </div>
     </div>
   );

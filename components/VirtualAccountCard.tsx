@@ -3,14 +3,19 @@ import { useState } from "react";
 import { Check, Copy, Landmark, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useVirtualAccount } from "@/hooks/useGapcastle";
+import { cn } from "@/lib/utils";
 
 /**
- * The customer's own bank account for funding their wallet, as one slim row.
- * Money sent here reaches the wallet automatically.
+ * The customer's own bank account for funding their wallet. Money sent here
+ * reaches the wallet automatically.
+ *
+ * @param tone "dark" sits on the wallet card as a frosted panel; "light" is for
+ * ordinary backgrounds such as the Add Fund sheet.
  */
-export function VirtualAccountCard() {
+export function VirtualAccountCard({ tone = "light" }: { tone?: "light" | "dark" }) {
   const { data: account, isLoading, isError } = useVirtualAccount();
   const [copied, setCopied] = useState(false);
+  const dark = tone === "dark";
 
   const copyAccountNumber = async () => {
     if (!account?.account_number) return;
@@ -26,41 +31,50 @@ export function VirtualAccountCard() {
   if (isError || (!isLoading && !account?.enabled)) return null;
 
   const ready = account?.status === "ready" && !!account.account_number;
+  const muted = dark ? "text-white/65" : "text-muted-foreground";
 
   return (
-    <div className="@container rounded-xl border bg-card px-4 py-3 shadow-card">
-      <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          {ready ? <Landmark className="h-[18px] w-[18px]" /> : <Loader2 className="h-[18px] w-[18px] animate-spin" />}
-        </span>
-  
-        {ready ? (
-          <>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1">
-                <span className="text-base font-semibold tabular-nums tracking-wide">{account.account_number}</span>
-                <button
-                  type="button"
-                  onClick={copyAccountNumber}
-                  aria-label={copied ? "Account number copied" : "Copy account number"}
-                  title={copied ? "Copied" : "Copy"}
-                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
-                </button>
-              </div>
-              <p className="truncate text-xs text-muted-foreground">
-                {[account.bank_name, account.account_name].filter(Boolean).join(" · ")}
-              </p>
-            </div>
-            <p className="hidden shrink-0 text-xs text-muted-foreground @xl:block">Transfer here to fund your wallet</p>
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {isLoading ? "Loading your account number..." : "Setting up your account number..."}
-          </p>
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-2xl p-3 ring-1 ring-inset sm:p-3.5",
+        dark ? "bg-white/10 ring-white/15 backdrop-blur-sm" : "bg-accent/60 ring-primary/10",
       )}
-      </div>
+    >
+      <span
+        className={cn(
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+          dark ? "bg-white/15 text-white" : "bg-primary/10 text-primary",
+        )}
+      >
+        {ready ? <Landmark className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
+      </span>
+
+      {ready ? (
+        <>
+          <div className="min-w-0 flex-1">
+            <p className={cn("truncate text-[11px] font-medium leading-none", muted)}>{account.bank_name}</p>
+            <p className="mt-1.5 text-lg font-bold leading-none tabular-nums tracking-wide">{account.account_number}</p>
+            {/* On its own line: it is what customers check before sending money. */}
+            <p className={cn("mt-1.5 truncate text-xs leading-none", muted)}>{account.account_name}</p>
+          </div>
+          <button
+            type="button"
+            onClick={copyAccountNumber}
+            aria-label={copied ? "Account number copied" : "Copy account number"}
+            className={cn(
+              "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all active:scale-95",
+              dark ? "bg-white text-slate-900 hover:bg-white/90" : "bg-primary text-primary-foreground hover:bg-primary/90",
+            )}
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </>
+      ) : (
+        <p className={cn("text-sm", muted)}>
+          {isLoading ? "Loading your account number..." : "Setting up your account number..."}
+        </p>
+      )}
     </div>
   );
 }

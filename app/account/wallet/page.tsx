@@ -9,11 +9,32 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatNaira, formatDate } from "@/lib/format";
-import { Plus, ArrowDownToLine, Loader2, Landmark, Send } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Gift, History, Loader2, Plus, Receipt, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
 import { openGatewayModal } from "@/lib/gateway-sdk";
 import { VirtualAccountCard } from "@/components/VirtualAccountCard";
+import { cn } from "@/lib/utils";
+
+/** One quick action on the wallet card: a labelled circle on phones, a pill from sm up. */
+const walletAction = "group flex flex-col items-center gap-1.5 rounded-2xl py-1 text-xs font-medium text-white/90 transition-transform active:scale-95 sm:flex-row sm:gap-2 sm:bg-white/10 sm:px-3.5 sm:py-2 sm:text-sm sm:transition-colors sm:hover:bg-white/15";
+const walletActionIcon = "flex h-11 w-11 items-center justify-center rounded-full bg-white/15 transition-colors group-hover:bg-white/20 sm:h-6 sm:w-6 sm:bg-transparent sm:group-hover:bg-transparent";
+
+function activityMeta(t: any): { Icon: React.ElementType; tint: string; credit: boolean } {
+  if (t.type === "wallet_funding") return { Icon: ArrowDownLeft, tint: "bg-success/10 text-success", credit: true };
+  if (t.type === "cashback") return { Icon: Gift, tint: "bg-success/10 text-success", credit: true };
+  if (t.type === "refund") return { Icon: RotateCcw, tint: "bg-amber-500/10 text-amber-600", credit: true };
+  if (t.type === "wallet_withdrawal") return { Icon: ArrowUpRight, tint: "bg-destructive/10 text-destructive", credit: false };
+  return { Icon: Receipt, tint: "bg-primary/10 text-primary", credit: false };
+}
+
+const statusLabel = (status: string) => (status === "pending_payment" ? "Pending" : status);
+
+const statusTint = (status: string) => {
+  if (status === "successful") return "text-muted-foreground";
+  if (status === "failed") return "text-destructive";
+  return "text-amber-600";
+};
 
 export default function WalletPage() {
   const { data: wallet } = useWallet();
@@ -22,6 +43,7 @@ export default function WalletPage() {
   const searchParams = useSearchParams();
 
   const [fundOpen, setFundOpen] = useState(false);
+  const [balanceHidden, setBalanceHidden] = useState(false);
   
   const [amount, setAmount] = useState(0);
   const { data: session } = useSession();
@@ -271,63 +293,106 @@ export default function WalletPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
+    <div className="mx-auto max-w-3xl space-y-4 md:space-y-6">
+      <div className="hidden md:block">
         <h1 className="text-2xl font-bold">Wallet</h1>
         <p className="text-sm text-muted-foreground">Fund, transfer, and track your money.</p>
       </div>
 
-      <div className="rounded-2xl gradient-wallet p-6 text-white shadow-elegant">
-        <p className="text-xs uppercase tracking-wider opacity-80">Available balance</p>
-        <p className="mt-2 text-4xl font-bold">{formatNaira(wallet?.balance ?? 0)}</p>
-        <p className="mt-1 text-sm opacity-80">Cashback: {formatNaira(wallet?.cashback_balance ?? 0)}</p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Button onClick={handleOpenFund} className="flex-1 sm:flex-none">
-              <Plus className="mr-2 h-4 w-4" /> Add Fund
-            </Button>
-          <Button asChild variant="outline" className="gap-2 border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white">
-            <Link href="/account/wallet/transfer"><Send className="h-4 w-4" />Transfer</Link>
-          </Button>
+      <section className="relative overflow-hidden rounded-3xl gradient-wallet p-4 text-white shadow-elegant sm:p-6">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/[0.06]" />
+        <div className="pointer-events-none absolute -bottom-24 -left-10 h-56 w-56 rounded-full bg-indigo-400/10" />
+
+        <div className="relative">
+          <div className="flex items-center justify-between gap-3 px-1">
+            <button
+              type="button"
+              onClick={() => setBalanceHidden(!balanceHidden)}
+              aria-label={balanceHidden ? "Show balance" : "Hide balance"}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-white/70 transition-colors hover:text-white"
+            >
+              Available balance
+              {balanceHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </button>
+            <Link href="/account/rewards" className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/85 transition-colors hover:bg-white/15">
+              Cashback {balanceHidden ? "₦••••" : formatNaira(wallet?.cashback_balance ?? 0)}
+            </Link>
+          </div>
+
+          <p className="mt-2 truncate px-1 text-[2rem] font-bold leading-tight tracking-tight tabular-nums sm:text-4xl">
+            {balanceHidden ? "₦••••••" : formatNaira(wallet?.balance ?? 0)}
+          </p>
+
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:mt-5 sm:flex sm:gap-2.5">
+            <button type="button" onClick={handleOpenFund} className={walletAction}>
+              <span className={cn(walletActionIcon, "bg-white text-slate-900 group-hover:bg-white/90 sm:bg-white sm:group-hover:bg-white/90")}><Plus className="h-5 w-5 sm:h-4 sm:w-4" /></span>
+              Add Fund
+            </button>
+            <Link href="/account/wallet/transfer" className={walletAction}>
+              <span className={walletActionIcon}><Send className="h-5 w-5 sm:h-4 sm:w-4" /></span>
+              Transfer
+            </Link>
+            <Link href="/account/transactions" className={walletAction}>
+              <span className={walletActionIcon}><History className="h-5 w-5 sm:h-4 sm:w-4" /></span>
+              History
+            </Link>
+          </div>
+
+          <div className="mt-4 sm:mt-5">
+            <VirtualAccountCard tone="dark" />
+          </div>
         </div>
-      </div>
+      </section>
 
-      <VirtualAccountCard />
-
-      <div className="rounded-2xl border bg-card p-6 shadow-card">
-        <h2 className="mb-4 font-semibold">Recent activity</h2>
+      <section className="rounded-3xl border bg-card p-4 shadow-card sm:p-6">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-semibold">Recent activity</h2>
+          <Link href="/account/transactions" className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline">
+            See all <ChevronRight className="h-4 w-4" />
+          </Link>
+        </div>
         {!txns?.length ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">No transactions yet.</p>
+          <div className="py-10 text-center">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <History className="h-5 w-5" />
+            </span>
+            <p className="mt-3 text-sm text-muted-foreground">No transactions yet.</p>
+          </div>
         ) : (
-          <div className="divide-y">
-            {txns.map((t: any) => (
-              <div key={t.id} className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-full ${t.type === 'wallet_funding' ? 'bg-success/10 text-success' : t.type === 'wallet_withdrawal' ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
-                    {t.type === 'wallet_funding' ? <Plus className="h-5 w-5" /> : t.type === 'wallet_withdrawal' ? <ArrowDownToLine className="h-5 w-5" /> : <Landmark className="h-5 w-5" />}
+          <div className="divide-y divide-border/60">
+            {txns.map((t: any) => {
+              const { Icon, tint, credit } = activityMeta(t);
+              return (
+                <div key={t.id} className="flex items-center gap-3 py-3">
+                  <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", tint)}>
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{t.description || t.provider_name || t.type.replace("_", " ")}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {formatDate(t.created_at)}<span className="hidden sm:inline"> · {t.reference}</span>
+                    </p>
                   </div>
-                  <div>
-                    <p className="font-medium">{t.description || t.provider_name || t.type.replace('_', ' ')}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(t.created_at)} · {t.reference}</p>
+                  <div className="shrink-0 text-right">
+                    <p className={cn("text-sm font-semibold tabular-nums", credit && "text-success")}>
+                      {credit ? "+" : "-"}{formatNaira(t.amount)}
+                    </p>
+                    {/* What the customer sent differs from what arrived, so say why. */}
+                    {t.type === "wallet_funding" && Number(t.fee) > 0 ? (
+                      <p className="text-xs text-muted-foreground"><span className="hidden sm:inline">Sent {formatNaira(t.total)}, fee</span><span className="sm:hidden">Fee</span> {formatNaira(t.fee)}</p>
+                    ) : (
+                      <p className={cn("text-xs capitalize", statusTint(t.status))}>{statusLabel(t.status)}</p>
+                    )}
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className={`font-semibold ${t.type === "wallet_funding" || t.type === "cashback" ? "text-success" : t.type === 'wallet_withdrawal' ? "text-destructive" : ""}`}>
-                    {t.type === "wallet_funding" || t.type === "cashback" ? "+" : "-"}{formatNaira(t.amount)}
-                  </p>
-                  {/* What the customer sent differs from what arrived, so say why. */}
-                  {t.type === "wallet_funding" && Number(t.fee) > 0 && (
-                    <p className="text-xs text-muted-foreground">Sent {formatNaira(t.total)}, fee {formatNaira(t.fee)}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground capitalize">{t.status}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
 
       <Dialog open={fundOpen} onOpenChange={setFundOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-y-auto max-sm:bottom-0 max-sm:left-0 max-sm:top-auto max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
           <DialogHeader><DialogTitle>Fund wallet</DialogTitle></DialogHeader>
           <VirtualAccountCard />
 
