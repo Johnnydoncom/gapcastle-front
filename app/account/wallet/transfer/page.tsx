@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -52,6 +52,8 @@ export default function TransferPage() {
   const [amount, setAmount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
+  /** Identifies this visit's transfer, so a retry after a dropped connection cannot send it twice. */
+  const idempotencyKey = useRef(crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
 
   const [banks, setBanks] = useState<{ name: string; code: string }[]>([]);
   /** Why a transfer cannot proceed, when the bank list could not be loaded. */
@@ -199,7 +201,7 @@ export default function TransferPage() {
           "Content-Type": "application/json",
           "Accept": "application/json",
         },
-        body: JSON.stringify({ amount, account_number: accountNumber, bank_code: bankCode, transaction_pin: pin }),
+        body: JSON.stringify({ amount, account_number: accountNumber, bank_code: bankCode, transaction_pin: pin, idempotency_key: idempotencyKey.current }),
       });
       const data = await res.json();
       if (res.status === 401) {
