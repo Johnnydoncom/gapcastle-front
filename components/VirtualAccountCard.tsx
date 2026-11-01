@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Check, Copy, Landmark, Loader2 } from "lucide-react";
+import { Check, Copy, Landmark, Loader2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useVirtualAccount } from "@/hooks/useGapcastle";
@@ -48,33 +48,47 @@ export function VirtualAccountCard() {
   }
 
   return (
-    <div className="rounded-2xl border bg-card p-6 shadow-card">
-      <div className="flex items-center gap-2">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+    <section className="rounded-2xl border bg-card p-5 shadow-card sm:p-6">
+      <div className="flex items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl gradient-primary text-white">
           <Landmark className="h-5 w-5" />
         </span>
-        <div>
-          <h2 className="font-semibold leading-tight">Your account number</h2>
-          <p className="text-xs text-muted-foreground">Transfer from any bank to fund your wallet</p>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3 rounded-lg bg-muted/50 p-3">
         <div className="min-w-0">
-          <p className="text-2xl font-bold tracking-wider">{account.account_number}</p>
-          <p className="truncate text-sm text-muted-foreground">{account.bank_name}</p>
-          {account.account_name && <p className="truncate text-sm text-muted-foreground">{account.account_name}</p>}
+          <h2 className="font-semibold leading-tight">Fund your wallet</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">Transfer to this account from any bank app</p>
         </div>
-        <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={copyAccountNumber}>
-          {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
       </div>
 
-      <p className="mt-3 text-xs text-muted-foreground">
-        Your wallet is credited automatically, usually within minutes. A small processing fee is taken from each
-        transfer and shown in your transaction history.
+      <div className="mt-5 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 p-4 sm:p-5">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Account number</p>
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <p className="text-3xl font-bold tabular-nums tracking-wider text-primary sm:text-4xl">
+            {account.account_number}
+          </p>
+          <Button size="sm" className="w-full gap-1.5 sm:w-auto" onClick={copyAccountNumber} aria-live="polite">
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {copied ? "Copied" : "Copy"}
+          </Button>
+        </div>
+      </div>
+
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="min-w-0">
+          <dt className="text-xs text-muted-foreground">Bank</dt>
+          <dd className="mt-0.5 truncate text-sm font-semibold">{account.bank_name}</dd>
+        </div>
+        {account.account_name && (
+          <div className="min-w-0">
+            <dt className="text-xs text-muted-foreground">Account name</dt>
+            <dd className="mt-0.5 truncate text-sm font-semibold">{account.account_name}</dd>
+          </div>
+        )}
+      </dl>
+
+      <p className="mt-4 flex items-center gap-1.5 border-t pt-4 text-xs text-muted-foreground">
+        <Zap className="h-3.5 w-3.5 shrink-0 text-primary" />
+        Your wallet updates automatically after each transfer.
       </p>
-    </div>
+    </section>
   );
 }
