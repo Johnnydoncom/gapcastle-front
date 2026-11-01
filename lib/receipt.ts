@@ -36,7 +36,7 @@ export interface ReceiptTransaction {
   service_group?: string | null;
   bill_service?: { name?: string } | null;
   token?: string | string[] | null;
-  /** Set on bank transfers from the wallet; the account number is masked. */
+  /** Set on bank transfers from the wallet. */
   transfer?: {
     recipient_name?: string | null;
     bank_name?: string | null;

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+  Dialog, DialogContent, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { formatNaira, formatDate } from "@/lib/format";
 import { toast } from "sonner";
@@ -282,7 +282,8 @@ export default function Transactions() {
       {/* ─── Transaction Detail / Receipt Dialog ───────────── */}
       <Dialog open={!!selectedTxn && !showReport} onOpenChange={(open) => !open && setSelectedTxn(null)}>
         <DialogContent className="max-w-md rounded-2xl p-0 max-h-[90vh] overflow-y-auto overflow-x-hidden">
-          <DialogTitle>&nbsp;</DialogTitle>
+          {/* Hidden, so the header's tint reaches the top edge of the dialog. */}
+          <DialogTitle className="sr-only">Transaction Receipt</DialogTitle>
           {activeTxn && (() => {
             const isCredit = activeTxn.type === "wallet_funding" || activeTxn.type === "cashback";
             return (
@@ -292,10 +293,7 @@ export default function Transactions() {
                   activeTxn.status === "failed" ? "bg-gradient-to-b from-red-500/10 to-transparent" :
                     "bg-gradient-to-b from-primary/5 to-transparent"
                   }`}>
-                  <DialogHeader>
-                    <DialogTitle className="sr-only">Transaction Receipt</DialogTitle>
-                    <DialogDescription className="sr-only">Details for transaction {activeTxn.reference}</DialogDescription>
-                  </DialogHeader>
+                  <DialogDescription className="sr-only">Details for transaction {activeTxn.reference}</DialogDescription>
                   <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl mb-3 ${activeTxn.status === "successful" ? "bg-emerald-500/15 text-emerald-600" :
                     activeTxn.status === "failed" ? "bg-red-500/15 text-red-500" :
                       "bg-primary/15 text-primary"
