@@ -8,7 +8,7 @@ import * as Icons from "lucide-react";
 import {
   Plus, Eye, EyeOff, ArrowUpRight, CircleDollarSign,
   CheckCircle2, Clock, XCircle, RefreshCw, Wallet, Gift,
-  ArrowDownLeft,
+  ArrowDownLeft, Send,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -96,6 +96,7 @@ export default function Dashboard() {
           <p className="mt-2 text-4xl font-bold">{hide ? "₦••••••" : formatNaira(wallet?.balance ?? 0)}</p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href="/account/wallet"><Button variant="secondary" className="gap-2"><Plus className="h-4 w-4" />Fund wallet</Button></Link>
+            <Link href="/account/wallet/transfer"><Button variant="outline" className="gap-2 border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"><Send className="h-4 w-4" />Transfer</Button></Link>
             <Link href="/account/services"><Button variant="outline" className="gap-2 border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white">Pay a bill</Button></Link>
           </div>
         </div>

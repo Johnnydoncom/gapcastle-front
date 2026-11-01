@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Wallet, Grid3x3, Receipt, Gift, Settings,
   LogOut, Menu, X, LifeBuoy, Phone, Wifi, Lightbulb, Tv,
-  GraduationCap, ShieldCheck, Sparkles, ChevronRight
+  GraduationCap, ShieldCheck, Sparkles, ChevronRight, Send
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ import { formatNaira } from "@/lib/format";
 const mainNav = [
   { to: "/account", label: "Dashboard", icon: LayoutDashboard },
   { to: "/account/wallet", label: "Wallet", icon: Wallet },
+  { to: "/account/wallet/transfer", label: "Transfer", icon: Send },
   { to: "/account/transactions", label: "Transactions", icon: Receipt },
   { to: "/account/rewards", label: "Rewards", icon: Gift },
 ];
@@ -53,7 +54,10 @@ export function AccountShell({ children, user }: AccountShellProps) {
 
   const handleSignOut = async () => { await signOut({ callbackUrl: "/" }); };
 
-  const isPathActive = (to: string) => pathname === to || (to !== "/account" && !!pathname?.startsWith(to));
+  // These have their own child entries in the menu, or the prefix would light
+  // both up (Wallet and Transfer, say).
+  const exactMatchNav = ["/account", "/account/wallet"];
+  const isPathActive = (to: string) => pathname === to || (!exactMatchNav.includes(to) && !!pathname?.startsWith(to));
 
   const userName = user?.name || "User";
   const userEmail = user?.email || "";
