@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { openGatewayModal } from "@/lib/gateway-sdk";
 import { TransactionPinDialog } from "@/components/TransactionPinDialog";
+import { VirtualAccountCard } from "@/components/VirtualAccountCard";
 import { TransactionPinError, assertPinAccepted } from "@/lib/transaction-pin";
 
 export default function WalletPage() {
@@ -97,6 +98,35 @@ export default function WalletPage() {
   const [saveBeneficiary, setSaveBeneficiary] = useState(false);
   const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
   const [activeWithdrawTab, setActiveWithdrawTab] = useState("new");
+
+  /*
+   * A bank transfer has no redirect or modal to report back, so while the
+   * customer is looking at their account details, watch for the deposit.
+   */
+  useEffect(() => {
+    if (!fundOpen) return;
+    const timer = setInterval(() => {
+      qc.invalidateQueries({ queryKey: ["wallet"] });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, [fundOpen, qc]);
+
+  const balanceWhenOpened = useRef<number | null>(null);
+  useEffect(() => {
+    if (!fundOpen) {
+      balanceWhenOpened.current = null;
+      return;
+    }
+    const balance = wallet?.balance === undefined ? null : Number(wallet.balance);
+    if (balance === null) return;
+    if (balanceWhenOpened.current === null) {
+      balanceWhenOpened.current = balance;
+    } else if (balance > balanceWhenOpened.current) {
+      toast.success(`${formatNaira(balance - balanceWhenOpened.current)} added to your wallet`);
+      balanceWhenOpened.current = balance;
+    }
+  }, [fundOpen, wallet?.balance]);
 
   useEffect(() => {
     const checkPayment = async () => {
@@ -477,6 +507,8 @@ export default function WalletPage() {
         </div>
       </div>
 
+      <VirtualAccountCard />
+
       <div className="rounded-2xl border bg-card p-6 shadow-card">
         <h2 className="mb-4 font-semibold">Recent activity</h2>
         {!txns?.length ? (
@@ -498,6 +530,10 @@ export default function WalletPage() {
                   <p className={`font-semibold ${t.type === "wallet_funding" || t.type === "cashback" ? "text-success" : t.type === 'wallet_withdrawal' ? "text-destructive" : ""}`}>
                     {t.type === "wallet_funding" || t.type === "cashback" ? "+" : "-"}{formatNaira(t.amount)}
                   </p>
+                  {/* What the customer sent differs from what arrived, so say why. */}
+                  {t.type === "wallet_funding" && Number(t.fee) > 0 && (
+                    <p className="text-xs text-muted-foreground">Sent {formatNaira(t.total)}, fee {formatNaira(t.fee)}</p>
+                  )}
                   <p className="text-xs text-muted-foreground capitalize">{t.status}</p>
                 </div>
               </div>
@@ -509,7 +545,13 @@ export default function WalletPage() {
       <Dialog open={fundOpen} onOpenChange={setFundOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Fund wallet</DialogTitle></DialogHeader>
+          <VirtualAccountCard />
+
+          {/* Only gateways other than Flutterwave come back from the API, for
+              customers who would rather not make a transfer. */}
+          {fundingGateways.length > 0 && (
           <div className="space-y-4">
+            <p className="text-sm font-medium text-muted-foreground">Or pay another way</p>
             <div className="space-y-2">
               <Label>Amount (₦)</Label>
               <Input type="number" min={100} value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))} placeholder="Enter amount" />
@@ -587,6 +629,7 @@ export default function WalletPage() {
               {loading ? "Redirecting to payment..." : `Fund ${amount ? formatNaira(amount) : "wallet"}`}
             </Button>
           </div>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -84,6 +84,33 @@ export const useWallet = (initialData?: any) => {
   });
 };
 
+export interface VirtualAccount {
+  /** Off when Flutterwave is not active for wallet funding. */
+  enabled: boolean;
+  status: "ready" | "pending" | "unavailable";
+  account_number?: string | null;
+  bank_name?: string | null;
+  account_name?: string | null;
+}
+
+/** The bank account the customer funds their wallet by transferring to. */
+export const useVirtualAccount = () => {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+
+  return useQuery({
+    queryKey: ["virtualAccount", session?.user?.id],
+    enabled: !!token,
+    queryFn: async (): Promise<VirtualAccount> => {
+      const data = await fetchApi("/wallet/virtual-account", token as string);
+      return data.data;
+    },
+    // It never changes once issued, but a new customer's may still be on its way.
+    staleTime: 60 * 60 * 1000,
+    refetchInterval: (query) => (query.state.data?.status === "pending" ? 20_000 : false),
+  });
+};
+
 export interface KycStatus {
   /** Admin switch. Off: nobody can verify, and withdrawals do not require it. */
   enabled: boolean;
