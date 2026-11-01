@@ -143,16 +143,24 @@ export default function Transactions() {
   // ─── Share Receipt ──────────────────────────────────────────
   const shareReceipt = useCallback(async () => {
     if (!activeTxn) return;
+    const transfer = activeTxn.transfer;
     const text = [
       `GapCastle Receipt`,
       `──────────────`,
       `Amount: ${formatNaira(activeTxn.amount)}`,
       `Status: ${activeTxn.status}`,
-      activeTxn.description && `Service: ${activeTxn.description}`,
-      activeTxn.provider_name && `Provider: ${activeTxn.provider_name}`,
-      activeTxn.receipt?.customer_name && `Customer Name: ${activeTxn.receipt.customer_name}`,
-      activeTxn.receipt?.customer_address && `Service Address: ${activeTxn.receipt.customer_address}`,
-      activeTxn.customer && `Account / Number: ${activeTxn.customer}`,
+      ...(transfer ? [
+        `Type: Bank transfer`,
+        transfer.recipient_name && `Recipient: ${transfer.recipient_name}`,
+        transfer.bank_name && `Bank: ${transfer.bank_name}`,
+        transfer.account_number && `Account number: ${transfer.account_number}`,
+      ] : [
+        activeTxn.description && `Service: ${activeTxn.description}`,
+        activeTxn.provider_name && `Provider: ${activeTxn.provider_name}`,
+        activeTxn.receipt?.customer_name && `Customer Name: ${activeTxn.receipt.customer_name}`,
+        activeTxn.receipt?.customer_address && `Service Address: ${activeTxn.receipt.customer_address}`,
+        activeTxn.customer && `Account / Number: ${activeTxn.customer}`,
+      ]),
       `Reference: ${activeTxn.reference}`,
       `Date: ${formatDate(activeTxn.created_at)}`,
       `──────────────`,
@@ -312,7 +320,20 @@ export default function Transactions() {
                 <div className="px-6">
                   <Separator className="mb-1" />
                   <div className="divide-y divide-dashed divide-border/60">
-                    {activeTxn.description && (
+                    {activeTxn.transfer ? (
+                      <>
+                        <ReceiptRow label="Type" value="Bank transfer" />
+                        {activeTxn.transfer.recipient_name && (
+                          <ReceiptRow label="Recipient" value={activeTxn.transfer.recipient_name} />
+                        )}
+                        {activeTxn.transfer.bank_name && (
+                          <ReceiptRow label="Bank" value={activeTxn.transfer.bank_name} />
+                        )}
+                        {activeTxn.transfer.account_number && (
+                          <ReceiptRow label="Account number" value={activeTxn.transfer.account_number} mono />
+                        )}
+                      </>
+                    ) : activeTxn.description && (
                       <ReceiptRow label="Service" value={activeTxn.description} />
                     )}
                     {activeTxn.provider_name && (
@@ -324,7 +345,7 @@ export default function Transactions() {
                     {activeTxn.receipt?.customer_address && (
                       <ReceiptRow label="Service Address" value={activeTxn.receipt.customer_address} />
                     )}
-                    {activeTxn.customer && (
+                    {activeTxn.customer && !activeTxn.transfer && (
                       <ReceiptRow label="Account / Number" value={activeTxn.customer} mono />
                     )}
                     {activeTxn.receipt?.meter_type && (
@@ -332,10 +353,10 @@ export default function Transactions() {
                     )}
                     <ReceiptRow label="Amount" value={formatNaira(activeTxn.amount)} />
                     {Number(activeTxn.fee) > 0 && (
-                      <ReceiptRow label="Fee" value={formatNaira(activeTxn.fee)} />
+                      <ReceiptRow label={activeTxn.transfer ? "Transfer fee" : "Fee"} value={formatNaira(activeTxn.fee)} />
                     )}
                     {Number(activeTxn.total) > 0 && Number(activeTxn.fee) > 0 && (
-                      <ReceiptRow label="Total" value={<span className="font-bold">{formatNaira(activeTxn.total)}</span>} />
+                      <ReceiptRow label={activeTxn.transfer ? "Total deducted" : "Total"} value={<span className="font-bold">{formatNaira(activeTxn.total)}</span>} />
                     )}
                     {Number(activeTxn.cashback) > 0 && (
                       <ReceiptRow label="Cashback" value={<span className="text-emerald-600 font-semibold">+{formatNaira(activeTxn.cashback)}</span>} />

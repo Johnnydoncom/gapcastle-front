@@ -36,6 +36,12 @@ export interface ReceiptTransaction {
   service_group?: string | null;
   bill_service?: { name?: string } | null;
   token?: string | string[] | null;
+  /** Set on bank transfers from the wallet; the account number is masked. */
+  transfer?: {
+    recipient_name?: string | null;
+    bank_name?: string | null;
+    account_number?: string | null;
+  } | null;
   receipt?: {
     customer_name?: string | null;
     customer_address?: string | null;
@@ -86,7 +92,21 @@ const STATUS_LABELS: Record<string, string> = {
   pending_payment: "AWAITING PAYMENT",
 };
 
+/** The recipient and details of a bank transfer, in place of the bill's customer and service. */
+const transferParty = (transfer: NonNullable<ReceiptTransaction["transfer"]>): string => `
+    <div class="box">
+      <h2>Recipient</h2>
+      <div class="body">
+        <div class="name">${escapeHtml(transfer.recipient_name || "—")}</div>
+        <div class="meta">
+          ${transfer.bank_name ? `<span>Bank: <b>${escapeHtml(transfer.bank_name)}</b></span>` : ""}
+          ${transfer.account_number ? `<span>Account number: <b class="mono">${escapeHtml(transfer.account_number)}</b></span>` : ""}
+        </div>
+      </div>
+    </div>`;
+
 export function buildReceiptHtml(txn: ReceiptTransaction, fallbackHolder?: AccountHolder): string {
+  const transfer = txn.transfer ?? null;
   const r = txn.receipt ?? {};
   const holder = r.account_holder ?? fallbackHolder ?? {};
   const status = (txn.status ?? "pending").toLowerCase();
@@ -168,15 +188,15 @@ export function buildReceiptHtml(txn: ReceiptTransaction, fallbackHolder?: Accou
       <div class="brand-sub">Bills &amp; Utility Payments</div>
     </div>
     <div class="doc">
-      <h1>Payment Receipt</h1>
+      <h1>${transfer ? "Transfer Receipt" : "Payment Receipt"}</h1>
       <p>Receipt No: <span class="mono">${escapeHtml(txn.reference)}</span></p>
       <p>Date: ${escapeHtml(formatReceiptDate(r.completed_at ?? txn.created_at))}</p>
-      <span class="stamp ${escapeHtml(status)}">${escapeHtml(STATUS_LABELS[status] ?? status.toUpperCase())}</span>
+      <span class="stamp ${escapeHtml(status)}">${escapeHtml(transfer && status === "successful" ? "SUCCESSFUL" : STATUS_LABELS[status] ?? status.toUpperCase())}</span>
     </div>
   </header>
 
   <div class="parties">
-    <div class="box">
+    ${transfer ? transferParty(transfer) : `<div class="box">
       <h2>Billed Customer</h2>
       <div class="body">
         ${r.customer_name ? `<div class="name">${escapeHtml(r.customer_name)}</div>` : ""}
@@ -188,9 +208,9 @@ export function buildReceiptHtml(txn: ReceiptTransaction, fallbackHolder?: Accou
         </div>
         ${hasVerifiedCustomer && biller ? `<p class="note">Name and service address as registered with ${escapeHtml(biller)}.</p>` : ""}
       </div>
-    </div>
+    </div>`}
     <div class="box muted">
-      <h2>Paid By</h2>
+      <h2>${transfer ? "Sent By" : "Paid By"}</h2>
       <div class="body">
         <div class="name">${escapeHtml(holder.name || "—")}</div>
         <div class="meta">
@@ -203,9 +223,12 @@ export function buildReceiptHtml(txn: ReceiptTransaction, fallbackHolder?: Accou
   </div>
 
   <section>
-    <h3>Service Details</h3>
+    <h3>${transfer ? "Transfer Details" : "Service Details"}</h3>
     <table>
-      ${rows([
+      ${rows(transfer ? [
+        ["Type", "Bank transfer"],
+        ["Transfer ID", txn.provider_reference, { mono: true }],
+      ] : [
         ["Service", serviceName],
         ["Biller / Provider", biller],
         ["Plan / Product", r.plan],
@@ -222,21 +245,21 @@ export function buildReceiptHtml(txn: ReceiptTransaction, fallbackHolder?: Accou
   </section>
 
   <section>
-    <h3>Payment Summary</h3>
+    <h3>${transfer ? "Transfer Summary" : "Payment Summary"}</h3>
     <table>
       ${rows([
         ["Amount", formatNaira(txn.amount)],
-        ["Convenience Fee", fee > 0 ? formatNaira(fee) : null],
+        [transfer ? "Transfer Fee" : "Convenience Fee", fee > 0 ? formatNaira(fee) : null],
         ["Cashback Earned", cashback > 0 ? formatNaira(cashback) : null],
         ["Transaction Reference", txn.reference, { mono: true }],
       ])}
-      <tr class="total"><th>Total Paid</th><td>${escapeHtml(formatNaira(total))}</td></tr>
+      <tr class="total"><th>${transfer ? "Total Deducted" : "Total Paid"}</th><td>${escapeHtml(formatNaira(total))}</td></tr>
     </table>
   </section>
 
   <footer>
     <p><strong>This is an electronically generated receipt and is valid without a signature.</strong></p>
-    <p>Verify this payment with reference ${escapeHtml(txn.reference)} on GapCastle.</p>
+    <p>Verify this ${transfer ? "transfer" : "payment"} with reference ${escapeHtml(txn.reference)} on GapCastle.</p>
     <p>Printed ${escapeHtml(formatReceiptDate(new Date().toISOString()))}</p>
   </footer>
 </div>
