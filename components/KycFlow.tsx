@@ -8,7 +8,12 @@ import { newIdempotencyKey } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatNaira } from "@/lib/format";
-import { ArrowLeft, CheckCircle2, Loader2, UserCheck, Camera } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, UserCheck, Camera, Check, ChevronsUpDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { cn } from "@/lib/utils";
+import { cleanKycValue, kycCustomer, kycDisplayValue, kycFieldError, kycFieldsFor, type KycField } from "@/lib/kyc-fields";
 import { toast } from "sonner";
 import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem } from "@/components/ui/combobox";
 import { Label } from "@/components/ui/label";
@@ -44,6 +49,13 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  /** The selected lookup's form, as the API declares it. */
+  const fields: KycField[] = kycFieldsFor(selectedProduct);
+  const needsBank = fields.some((field) => field.type === "bank");
+  const [banks, setBanks] = useState<{ code: string; name: string }[]>([]);
+  const [banksState, setBanksState] = useState<"idle" | "loading" | "loaded" | "failed">("idle");
+  const [bankPickerOpen, setBankPickerOpen] = useState<string | null>(null);
   // Confirms on the review step that the price listed is still the price charged.
   const { data: priceQuote, isFetching: quoteLoading, error: quoteError } = usePriceQuote(step === 2 && selectedProduct ? {
     serviceSlug: "kyc",
@@ -125,6 +137,23 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
   // Clean up polling on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
+  // NUBAN lookups need the bank's code. The list is the one withdrawals use;
+  // if it cannot load, the field falls back to typing the code.
+  useEffect(() => {
+    const token = session?.accessToken;
+    if (!needsBank || banksState !== "idle" || !token) return;
+
+    setBanksState("loading");
+    fetch(`${API_URL}/wallet/banks`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } })
+      .then((res) => res.json())
+      .then((result) => {
+        const list = Array.isArray(result?.data) ? result.data : [];
+        setBanks(list.filter((bank: any) => bank?.code && bank?.name));
+        setBanksState(list.length > 0 ? "loaded" : "failed");
+      })
+      .catch(() => setBanksState("failed"));
+  }, [needsBank, banksState, session?.accessToken, API_URL]);
+
   // /services lists only active services, so KYC missing from it has been
   // deactivated by an admin. A finished transaction's result still shows.
   if (servicesLoaded && !services.some((s: { slug: string }) => s.slug === "kyc") && step !== 3) {
@@ -143,6 +172,11 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
 
   const handleInputChange = (field: string, value: string) => {
     setFormValues(prev => ({ ...prev, [field]: value }));
+    setFieldErrors(prev => {
+      if (!prev[field]) return prev;
+      const { [field]: _cleared, ...rest } = prev;
+      return rest;
+    });
   };
 
   const onReview = (e: React.FormEvent) => {
@@ -150,16 +184,28 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
     if (!selectedCountry) return toast.error("Please select a country");
     if (!selectedProduct) return toast.error("Please select a KYC product");
 
-    // Validate required fields
-    const requiredFields = selectedProduct.metadata?.label_name || [];
-    for (const field of requiredFields) {
-      if (!formValues[field] || formValues[field].trim() === "") {
-        return toast.error(`Please provide ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}`);
-      }
+    // The same checks the server runs before charging, shown beside each field.
+    const errors: Record<string, string> = {};
+    for (const field of fields) {
+      const error = kycFieldError(field, formValues[field.name]);
+      if (error) errors[field.name] = error;
     }
+    setFieldErrors(errors);
 
+    const firstError = Object.values(errors)[0];
+    if (firstError) return toast.error(firstError);
+
+    setFormValues(Object.fromEntries(fields.map((field) => [field.name, cleanKycValue(field, formValues[field.name])])));
     setStep(2);
   };
+
+  /** The details the lookup is sent, empty optional ones left out. */
+  const lookupDetails = (): Record<string, string> =>
+    Object.fromEntries(
+      fields
+        .map((field) => [field.name, cleanKycValue(field, formValues[field.name])] as const)
+        .filter(([, value]) => value !== ""),
+    );
 
   /** Build summary items for the ReviewAndPay component */
   const buildSummaryItems = (): OrderSummaryItem[] => {
@@ -167,15 +213,11 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
     items.push({ label: "Country", value: selectedCountry });
     items.push({ label: "Product", value: selectedProduct?.name ?? "" });
 
-    // Add dynamic form fields (but truncate image URLs)
-    Object.entries(formValues).forEach(([key, value]) => {
-      const isImageField = ['image', 'imageUrl', 'photo', 'document', 'passport'].some(
-        imgField => key.toLowerCase().includes(imgField.toLowerCase())
-      );
-      const displayValue = isImageField && value.startsWith("http") ? "✓ Uploaded" : value;
-      const label = key.replace(/_/g, ' ').replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim();
-      items.push({ label, value: displayValue });
-    });
+    for (const field of fields) {
+      const value = formValues[field.name] ?? "";
+      if (value.trim() === "") continue;
+      items.push({ label: field.label, value: kycDisplayValue(field, value, banks) });
+    }
 
     return items;
   };
@@ -265,13 +307,11 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
         bill_service_slug: "kyc",
         bill_provider_id: zeehProvider.id,
         bill_product_id: selectedProduct.id,
-        customer: formValues[selectedProduct.metadata?.label_name?.[0]] || "Customer",
+        // The server resets this from the details; sent because it is required.
+        customer: kycCustomer(fields, formValues, selectedProduct.name ?? "Verification"),
         amount: Number(selectedProduct.amount),
-        metadata: {
-          ...formValues,
-          country: selectedCountry,
-          endpoint: selectedProduct.metadata?.endpoint,
-        },
+        // The lookup to run comes from the product on the server, never from here.
+        metadata: lookupDetails(),
         payment_gateway_id: selectedGateway?.slug === 'wallet' ? null : selectedGatewayId,
         transaction_pin: pin,
         idempotency_key: newIdempotencyKey(),
@@ -320,11 +360,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
 
       setPaymentStatusLabel("Opening payment modal…");
 
-      const userEmail =
-        (session?.user as any)?.email ??
-        (formValues[selectedProduct.metadata?.label_name?.[0]]?.includes("@")
-          ? formValues[selectedProduct.metadata?.label_name?.[0]]
-          : `user-${reference}@gapcastle.ng`);
+      const userEmail = (session?.user as any)?.email ?? `user-${reference}@gapcastle.ng`;
 
       const gatewayResult = await openGatewayModal({
         gatewaySlug: selectedGateway!.slug,
@@ -475,7 +511,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
                 {activeTxn.customer && (
                   <div className="flex justify-between gap-4 py-1">
                     <span className="text-muted-foreground">Customer</span>
-                    <span className="text-right text-foreground font-medium">{activeTxn.metadata?.customerName || activeTxn.customer}</span>
+                    <span className="text-right text-foreground font-medium">{activeTxn.receipt?.customer_name || activeTxn.customer}</span>
                   </div>
                 )}
                 <div className="flex justify-between gap-4 py-1">
@@ -564,6 +600,124 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
     );
   }
 
+  /** The control for one field of the selected lookup, by its declared type. */
+  const renderField = (field: KycField) => {
+    const id = `kyc-${field.name}`;
+    const value = formValues[field.name] ?? "";
+    const invalid = Boolean(fieldErrors[field.name]);
+    const inputClass = cn("h-11 rounded-xl bg-muted/50", invalid && "border-destructive");
+
+    if (field.type === "image") {
+      const busy = Boolean(uploading[field.name]);
+      return (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 h-11 rounded-xl bg-muted/50 border-dashed"
+              onClick={() => setActiveCameraField(field.name)}
+              disabled={busy}
+            >
+              <Camera className="w-4 h-4 mr-2" />
+              Take Photo
+            </Button>
+            <div className="relative flex-1">
+              <Input
+                id={id}
+                type="file"
+                accept="image/jpeg,image/png"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) handleFileUpload(field.name, e.target.files[0]);
+                }}
+                disabled={busy}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+              />
+              <Button type="button" variant="outline" className="w-full h-11 rounded-xl bg-muted/50 pointer-events-none" disabled={busy}>
+                Upload Photo
+              </Button>
+            </div>
+          </div>
+          {busy && <p className="text-xs text-primary flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Uploading...</p>}
+          {value && !busy && (
+            <div className="mt-2 relative rounded-xl overflow-hidden border border-emerald-200 bg-muted w-24 h-24 sm:w-32 sm:h-32 shadow-sm">
+              <img src={value} alt={`${field.label} preview`} className="w-full h-full object-cover" />
+              <div className="absolute top-1.5 right-1.5 bg-emerald-500 text-white rounded-full shadow-sm">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (field.type === "select") {
+      return (
+        <NativeSelect id={id} value={value} onChange={(e) => handleInputChange(field.name, e.target.value)} className={cn("w-full", invalid && "border-destructive")}>
+          <NativeSelectOption value="">Select {field.label.toLowerCase()}</NativeSelectOption>
+          {field.options.map((option) => (
+            <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
+          ))}
+        </NativeSelect>
+      );
+    }
+
+    if (field.type === "bank" && banksState !== "failed") {
+      const selected = banks.find((bank) => bank.code === value);
+      return (
+        <Popover open={bankPickerOpen === field.name} onOpenChange={(open) => setBankPickerOpen(open ? field.name : null)}>
+          <PopoverTrigger asChild>
+            <Button
+              id={id}
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={bankPickerOpen === field.name}
+              className={cn("h-11 w-full justify-between rounded-xl bg-muted/50 font-normal", invalid && "border-destructive")}
+              disabled={banksState !== "loaded"}
+            >
+              {banksState === "loaded" ? (selected?.name ?? "Select a bank") : "Loading banks..."}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search bank..." />
+              <CommandList>
+                <CommandEmpty>No bank found.</CommandEmpty>
+                <CommandGroup>
+                  {banks.map((bank) => (
+                    <CommandItem key={bank.code} value={bank.name} onSelect={() => { handleInputChange(field.name, bank.code); setBankPickerOpen(null); }}>
+                      <Check className={cn("mr-2 h-4 w-4", value === bank.code ? "opacity-100" : "opacity-0")} />
+                      {bank.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      );
+    }
+
+    const numeric = field.type === "digits" || field.type === "phone" || field.type === "bank";
+    return (
+      <Input
+        id={id}
+        type={field.type === "date" ? "date" : field.type === "phone" ? "tel" : "text"}
+        inputMode={numeric ? "numeric" : undefined}
+        autoCapitalize={field.transform === "upper" ? "characters" : undefined}
+        max={field.type === "date" ? new Date().toISOString().slice(0, 10) : undefined}
+        maxLength={field.type === "phone" ? 14 : field.max ?? undefined}
+        value={value}
+        onChange={(e) => handleInputChange(field.name, field.type === "digits" ? e.target.value.replace(/\D/g, "") : e.target.value)}
+        placeholder={field.placeholder ?? (field.type === "bank" ? "Bank code, e.g. 058" : `Enter ${field.label.toLowerCase()}`)}
+        aria-invalid={invalid}
+        className={inputClass}
+      />
+    );
+  };
+
   // ── Steps 1 & 2 ───────────────────────────────────────────────────────────
   return (
     <div className="mx-auto w-full max-w-2xl sm:space-y-4">
@@ -601,7 +755,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
                     <button
                       key={country}
                       type="button"
-                      onClick={() => { setSelectedCountry(country); setSelectedProduct(null); setFormValues({}); }}
+                      onClick={() => { setSelectedCountry(country); setSelectedProduct(null); setFormValues({}); setFieldErrors({}); }}
                       className={`flex flex-col items-center justify-center gap-2 rounded-xl border p-4 text-sm transition-all ${selectedCountry === country ? "border-primary bg-primary/5 font-semibold text-primary ring-1 ring-primary" : "bg-card text-muted-foreground hover:border-primary/50 hover:bg-muted"
                         }`}
                     >
@@ -623,6 +777,7 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
                       if (prod) {
                         setSelectedProduct(prod);
                         setFormValues({});
+                        setFieldErrors({});
                       }
                     }}
                   >
@@ -658,80 +813,20 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
                 <div className="space-y-4 pt-4 border-t border-border animate-in fade-in slide-in-from-top-4 duration-300">
                   <Label className="text-base font-semibold">3. Enter Details</Label>
                   <div className="space-y-4">
-                    {(selectedProduct.metadata?.label_name || []).map((field: string) => {
-                      const isImageField = ['image', 'imageUrl', 'photo', 'document', 'passport'].some(imgField => field.toLowerCase().includes(imgField.toLowerCase()));
-                      return (
-                        <div key={field} className="space-y-1.5">
-                          <Label className="capitalize text-sm font-medium">{field.replace(/_/g, ' ').replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim()}</Label>
-                          {isImageField ? (
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="flex-1 h-11 rounded-xl bg-muted/50 border-dashed"
-                                  onClick={() => setActiveCameraField(field)}
-                                  disabled={uploading[field]}
-                                >
-                                  <Camera className="w-4 h-4 mr-2" />
-                                  Take Photo
-                                </Button>
-                                <div className="relative flex-1">
-                                  <Input
-                                    type="file"
-                                    accept="image/*,.pdf"
-                                    onChange={(e) => {
-                                      if (e.target.files && e.target.files[0]) {
-                                        handleFileUpload(field, e.target.files[0]);
-                                      }
-                                    }}
-                                    disabled={uploading[field]}
-                                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full h-11 rounded-xl bg-muted/50 pointer-events-none"
-                                    disabled={uploading[field]}
-                                  >
-                                    Upload File
-                                  </Button>
-                                </div>
-                              </div>
-                              {uploading[field] && <p className="text-xs text-primary flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Uploading...</p>}
-                              {formValues[field] && !uploading[field] && (
-                                <div className="mt-2 relative rounded-xl overflow-hidden border border-emerald-200 bg-muted w-24 h-24 sm:w-32 sm:h-32 shadow-sm">
-                                  {formValues[field].toLowerCase().endsWith('.pdf') ? (
-                                    <div className="flex flex-col items-center justify-center w-full h-full p-2 text-center text-xs text-muted-foreground bg-emerald-50">
-                                      <CheckCircle2 className="w-8 h-8 text-emerald-500 mb-1" />
-                                      PDF Uploaded
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={formValues[field]}
-                                      alt="Uploaded Preview"
-                                      className="w-full h-full object-cover"
-                                    />
-                                  )}
-                                  <div className="absolute top-1.5 right-1.5">
-                                    <div className="bg-emerald-500 text-white rounded-full shadow-sm">
-                                      <CheckCircle2 className="w-4 h-4" />
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <Input
-                              value={formValues[field] || ""}
-                              onChange={(e) => handleInputChange(field, e.target.value)}
-                              placeholder={`Enter ${field.replace(/_/g, ' ').replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim().toLowerCase()}`}
-                              className="h-11 rounded-xl bg-muted/50"
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                    {fields.map((field) => (
+                      <div key={field.name} className="space-y-1.5">
+                        <Label htmlFor={`kyc-${field.name}`} className="text-sm font-medium">
+                          {field.label}
+                          {!field.required && <span className="ml-1 font-normal text-muted-foreground">(optional)</span>}
+                        </Label>
+                        {renderField(field)}
+                        {fieldErrors[field.name] ? (
+                          <p className="text-xs text-destructive">{fieldErrors[field.name]}</p>
+                        ) : field.hint ? (
+                          <p className="text-xs text-muted-foreground">{field.hint}</p>
+                        ) : null}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

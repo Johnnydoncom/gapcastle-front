@@ -58,7 +58,7 @@ export function ServiceSidebar({ category, onAutofill }: ServiceSidebarProps) {
               <div key={txn.id} className="group relative flex items-center justify-between rounded-xl border border-transparent bg-secondary/30 p-3 transition-colors hover:border-primary/20 hover:bg-secondary/60">
                 <div>
                   <p className="font-semibold text-sm">{txn.customer}</p>
-                  <p className="text-xs text-muted-foreground">{txn.bill_provider?.name || "Provider"} • {formatNaira(txn.amount)}</p>
+                  <p className="text-xs text-muted-foreground">{txn.bill_provider?.name || txn.bill_product?.name || txn.description || "Payment"} • {formatNaira(txn.amount)}</p>
                 </div>
                 <Button 
                   size="icon" 

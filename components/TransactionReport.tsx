@@ -13,7 +13,13 @@ interface TransactionReportProps {
 export function TransactionReport({ transaction, onClose }: TransactionReportProps) {
   if (!transaction) return null;
 
-  const data = transaction.response || {};
+  const response = transaction.response || {};
+  // Lookups made since the KYC rework keep the result under kyc_report; older
+  // ones stored the fields at the top level.
+  const kyc = response.kyc_report && typeof response.kyc_report === "object" ? response.kyc_report : null;
+  const data: Record<string, any> = kyc?.details ?? response;
+  const records: Record<string, any>[] = Array.isArray(kyc?.records) ? kyc.records : [];
+  const faceMatch: { matched: boolean; confidence: number | null } | null = kyc?.face_match ?? null;
   const isSuccessful = transaction.status === "successful";
 
   if (!isSuccessful) {
@@ -28,16 +34,18 @@ export function TransactionReport({ transaction, onClose }: TransactionReportPro
   }
 
   const images = {
-    photo: data.photo || data.image || data.imageUrl,
-    signature: data.signature,
-    document: data.document,
+    photo: response.photo || data.photo || data.image,
+    signature: response.signature || data.signature,
+    document: response.document || data.document,
   };
+  const fullName = response.customerName || data.fullName
+    || [data.firstName ?? data.firstname, data.middleName ?? data.middlename, data.lastName ?? data.lastname ?? data.surname].filter(Boolean).join(" ");
 
   const isPdf = (url?: string) => url?.toLowerCase().includes('.pdf');
 
   // Extract other metadata skipping images
   const details = Object.entries(data).filter(([key]) => 
-    !['photo', 'image', 'imageUrl', 'signature', 'document'].includes(key)
+    !['photo', 'image', 'imageUrl', 'signature', 'document', 'kyc_report', 'customerName'].includes(key)
   );
 
   const handlePrint = () => {
@@ -65,7 +73,20 @@ export function TransactionReport({ transaction, onClose }: TransactionReportPro
 
       <div className="p-6 space-y-8">
         {/* Profile Section */}
-        {(images.photo || data.firstName || data.lastName || data.surname || data.fullName) && (
+        {/* Face match */}
+        {faceMatch && (
+          <div className={`flex items-center justify-between rounded-xl border p-4 ${faceMatch.matched ? "border-emerald-500/30 bg-emerald-500/5" : "border-destructive/30 bg-destructive/5"}`}>
+            <div>
+              <p className="text-sm font-semibold">{faceMatch.matched ? "Face matched" : "Face did not match"}</p>
+              <p className="text-xs text-muted-foreground">The photo provided was compared with the photo on record.</p>
+            </div>
+            {faceMatch.confidence !== null && (
+              <span className={`text-lg font-bold tabular-nums ${faceMatch.matched ? "text-emerald-600" : "text-destructive"}`}>{faceMatch.confidence}%</span>
+            )}
+          </div>
+        )}
+
+        {(images.photo || fullName) && (
           <div className="flex flex-col sm:flex-row gap-6 items-start">
             {images.photo && (
               <div className="shrink-0 relative w-32 h-32">
@@ -98,17 +119,55 @@ export function TransactionReport({ transaction, onClose }: TransactionReportPro
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-                <DetailRow label="Name" value={data.fullName || `${data.firstName || ''} ${data.middleName || data.middlename || ''} ${data.lastName || data.surname || ''}`} />
+                <DetailRow label="Name" value={fullName} />
                 <DetailRow label="Gender" value={data.gender} />
-                <DetailRow label="Date of Birth" value={data.dateOfBirth || data.birthdate} />
-                <DetailRow label="Phone" value={data.phone || data.telephoneno || data.phoneNumber} />
+                <DetailRow label="Date of Birth" value={data.dateOfBirth || data.birthDate || data.birthdate} />
+                <DetailRow label="Phone" value={data.phone || data.telephoneNo || data.telephoneno || data.phoneNumber || data.phoneNumber1 || data.mobile} />
                 <DetailRow label="Email" value={data.email} />
               </div>
             </div>
           </div>
         )}
 
+        {/* Businesses found (CAC) */}
+        {records.length > 0 && (
+          <div className="space-y-4">
+            <div className="pb-2 border-b">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                {records.length === 1 ? "Business Found" : `${records.length} Businesses Found`}
+              </h3>
+            </div>
+            {records.map((record, index) => (
+              <div key={index} className="rounded-xl border p-4 space-y-3">
+                <p className="font-semibold">{record.approvedName ?? record.companyName ?? `Record ${index + 1}`}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  {Object.entries(record).map(([key, value]) =>
+                    Array.isArray(value) || key === "approvedName" ? null : <DetailRow key={key} label={humaniseKey(key)} value={String(value)} />
+                  )}
+                </div>
+                {Array.isArray(record.directors) && record.directors.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Directors &amp; shareholders</p>
+                    {record.directors.map((person: Record<string, any>, i: number) => (
+                      <div key={i} className="text-sm">
+                        <span className="font-medium">{[person.firstname, person.otherName, person.surname].filter(Boolean).join(" ") || "Unnamed"}</span>
+                        {person.affiliateTypeFk && <span className="text-muted-foreground"> · {person.affiliateTypeFk}</span>}
+                        {person.numSharesAlloted && <span className="text-muted-foreground"> · {Number(person.numSharesAlloted).toLocaleString()} shares</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {kyc && records.length === 0 && details.length === 0 && !fullName && (
+          <p className="text-sm text-muted-foreground">No matching record was found for the details provided.</p>
+        )}
+
         {/* Dynamic Details */}
+        {details.length > 0 && (
         <div className="space-y-4">
           <div className="pb-2 border-b">
             <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -120,18 +179,19 @@ export function TransactionReport({ transaction, onClose }: TransactionReportPro
             {details.map(([key, value]) => {
               if (typeof value === 'object' || !value) return null;
               // Skip fields already shown in personal info
-              if (['firstName', 'lastName', 'surname', 'middleName', 'middlename', 'fullName', 'gender', 'dateOfBirth', 'birthdate', 'phone', 'telephoneno', 'phoneNumber', 'email', 'message', 'success', 'statusCode', 'response_code', 'customer'].includes(key)) return null;
+              if (['firstName', 'firstname', 'lastName', 'lastname', 'surname', 'middleName', 'middlename', 'fullName', 'gender', 'dateOfBirth', 'birthDate', 'birthdate', 'phone', 'telephoneNo', 'telephoneno', 'phoneNumber', 'phoneNumber1', 'mobile', 'email', 'message', 'success', 'statusCode', 'response_code', 'customer'].includes(key)) return null;
               
               return (
                 <DetailRow 
                   key={key} 
-                  label={key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')} 
+                  label={humaniseKey(key)}
                   value={String(value)} 
                 />
               );
             })}
           </div>
         </div>
+        )}
 
         {/* Signature */}
         {images.signature && (
@@ -202,6 +262,10 @@ export function TransactionReport({ transaction, onClose }: TransactionReportPro
       </div>
     </div>
   );
+}
+
+function humaniseKey(key: string) {
+  return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ");
 }
 
 function DetailRow({ label, value }: { label: string, value: any }) {
