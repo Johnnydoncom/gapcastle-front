@@ -7,6 +7,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Loader2, LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
 import { PinStatus, TransactionPinError, pinRequest } from "@/lib/transaction-pin";
@@ -289,7 +290,7 @@ export function TransactionPinDialog({
             {newPinFields}
             <div className="space-y-2">
               <Label htmlFor="pin-password">Account password</Label>
-              <Input id="pin-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <PasswordInput id="pin-password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             {error && <p className="text-center text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={busy || !newPinReady || !password}>
@@ -328,7 +329,7 @@ export function TransactionPinDialog({
           <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (password) sendResetCode(); }}>
             <div className="space-y-2">
               <Label htmlFor="reset-password">Account password</Label>
-              <Input id="reset-password" type="password" autoComplete="current-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} />
+              <PasswordInput id="reset-password" autoComplete="current-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             {error && <p className="text-center text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={busy || !password}>

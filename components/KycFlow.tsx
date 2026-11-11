@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useWallet, usePaymentGateways, usePriceQuote, useServices } from "@/hooks/useGapcastle";
+import { useWallet, usePaymentGateways, usePriceQuote, useServices, useIdentityGate } from "@/hooks/useGapcastle";
+import { IdentityRequiredGate } from "@/components/IdentityRequiredGate";
 import { newIdempotencyKey } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,8 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
   const { data: wallet } = useWallet(initialWallet);
   const { data: gateways = [] } = usePaymentGateways();
   const { data: services = [], isSuccess: servicesLoaded } = useServices();
+  // An admin can restrict KYC lookups to identity-verified customers.
+  const identityGate = useIdentityGate((services as any[]).find((s: any) => s.slug === "kyc"));
 
   // Data processing
   const zeehProvider = initialProviders.find(p => p.slug === "zeeh_africa" || p.slug.includes("zeeh"));
@@ -164,6 +167,14 @@ export function KycFlow({ initialProviders = [], initialWallet }: KycFlowProps) 
         <Button variant="outline" onClick={() => router.push("/account/services")}>See available services</Button>
       </div>
     );
+  }
+
+  if (step !== 3 && identityGate.checking) {
+    return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  }
+
+  if (step !== 3 && identityGate.blocked) {
+    return <IdentityRequiredGate serviceName="KYC Verification" identity={identityGate.identity} />;
   }
 
   const countryProducts = products.filter((p: any) => p.metadata?.country_name === selectedCountry);

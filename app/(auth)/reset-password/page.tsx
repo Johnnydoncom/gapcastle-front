@@ -3,11 +3,11 @@ import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Logo } from "@/components/Logo";
 import { toast } from "sonner";
-import { CheckCircle2, ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { CheckCircle2, ArrowLeft } from "lucide-react";
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -17,8 +17,6 @@ function ResetPasswordForm() {
 
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -107,51 +105,29 @@ function ResetPasswordForm() {
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
         <div className="space-y-2">
           <Label htmlFor="password">New password</Label>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min. 8 characters"
-              className="pr-10"
-              autoFocus
-            />
-            <button
-              type="button"
-              tabIndex={-1}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setShowPassword((v) => !v)}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
+          <PasswordInput
+            id="password"
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Min. 8 characters"
+            autoFocus
+          />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="confirm">Confirm new password</Label>
-          <div className="relative">
-            <Input
-              id="confirm"
-              type={showConfirm ? "text" : "password"}
-              required
-              minLength={8}
-              value={passwordConfirmation}
-              onChange={(e) => setPasswordConfirmation(e.target.value)}
-              placeholder="Re-enter your password"
-              className="pr-10"
-            />
-            <button
-              type="button"
-              tabIndex={-1}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setShowConfirm((v) => !v)}
-            >
-              {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
+          <PasswordInput
+            id="confirm"
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={passwordConfirmation}
+            onChange={(e) => setPasswordConfirmation(e.target.value)}
+            placeholder="Re-enter your password"
+          />
           {passwordConfirmation && password !== passwordConfirmation && (
             <p className="text-xs text-destructive">Passwords do not match.</p>
           )}

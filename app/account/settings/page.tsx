@@ -97,7 +97,7 @@ export default function Settings() {
           <Input value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={nameLocked} />
           <p className="text-xs text-muted-foreground">
             {bvnVerified
-              ? "Verified with your BVN. Contact support if it needs correcting."
+              ? "Verified with your ID. Contact support if it needs correcting."
               : nameLocked
                 ? "Your name can no longer be changed here. Contact support if it needs correcting."
                 : `Use your name exactly as it appears on your bank account. You can correct it once, and withdrawals pause for ${holdHours} hours afterwards.`}

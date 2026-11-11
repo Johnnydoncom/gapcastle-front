@@ -400,13 +400,21 @@ export default function TransferPage() {
             title="Verify your identity to transfer"
             action={(
               <Button asChild className="w-full">
-                <Link href="/account/settings#identity">{kyc.status === "pending" ? "Finish verification" : "Verify my BVN"}</Link>
+                <Link href={kyc.identity?.enabled ? "/account/verify?next=/account/wallet/transfer" : "/account/settings#identity"}>
+                  {kyc.identity?.enabled
+                    ? (kyc.identity.status === "pending" ? "Finish verification" : "Verify my identity")
+                    : (kyc.status === "pending" ? "Finish verification" : "Verify my BVN")}
+                </Link>
               </Button>
             )}
           >
-            {kyc.status === "pending"
-              ? "Your BVN verification is waiting for your approval on the NIBSS page."
-              : "For your security, only BVN-verified accounts can transfer. It takes about a minute."}
+            {kyc.identity?.enabled
+              ? (kyc.identity.status === "pending"
+                ? "Your ID checked out. Just the face check is left."
+                : "For your security, only verified accounts can transfer. Verify with your NIN, BVN or CAC in about 3 minutes.")
+              : kyc.status === "pending"
+                ? "Your BVN verification is waiting for your approval on the NIBSS page."
+                : "For your security, only BVN-verified accounts can transfer. It takes about a minute."}
           </TransferGate>
         ) : holdUntil ? (
           <TransferGate title="Transfers are paused">

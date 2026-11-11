@@ -5,7 +5,8 @@ import { useSession, signOut } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useWallet, useProviders, useServiceApis, usePaymentGateways, useServices, useBillBeneficiaries, usePriceQuote, type BillApiOption, type BillBeneficiary } from "@/hooks/useGapcastle";
+import { useWallet, useProviders, useServiceApis, usePaymentGateways, useServices, useBillBeneficiaries, usePriceQuote, useIdentityGate, type BillApiOption, type BillBeneficiary } from "@/hooks/useGapcastle";
+import { IdentityRequiredGate } from "@/components/IdentityRequiredGate";
 import { newIdempotencyKey } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -75,6 +76,8 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
   // cashback_percentage for this service (from the /services endpoint)
   const currentService = (services as any[]).find((s: any) => s.slug === groupSlug);
   const cashbackPct = Number(currentService?.cashback_percentage ?? 0);
+  // Services an admin restricted to identity-verified customers (Credit Check).
+  const identityGate = useIdentityGate(currentService);
 
   const providerId = watch("providerId");
   const amount = watch("amount");
@@ -218,6 +221,14 @@ export function ServiceFlow({ category, title: overrideTitle, initialProviders, 
         <Button variant="outline" onClick={() => router.push("/account/services")}>See available services</Button>
       </div>
     );
+  }
+
+  if (step !== 3 && identityGate.checking) {
+    return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  }
+
+  if (step !== 3 && identityGate.blocked) {
+    return <IdentityRequiredGate serviceName={overrideTitle || config.title} identity={identityGate.identity} />;
   }
 
   const balance = Number(wallet?.balance ?? 0);

@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { BadgeCheck, Clock, Loader2, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { BadgeCheck, Building2, Clock, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { fetchApi, useKycStatus } from "@/hooks/useGapcastle";
+import { fetchApi, useKycStatus, type IdentityStatus } from "@/hooks/useGapcastle";
 import { formatDate } from "@/lib/format";
 
 /** What the API's callback reports in ?kyc= when the user returns from NIBSS. */
@@ -93,6 +94,12 @@ export function IdentityVerificationCard() {
   };
 
   const showForm = kyc && (kyc.status === "unverified" || kyc.status === "failed" || restarting);
+
+  // Platform KYC (NIN/BVN/CAC + face check) on: it is the one way to verify,
+  // and it also counts for withdrawals.
+  if (kyc?.identity?.enabled || (kyc?.verified && kyc.identity?.method === "identity")) {
+    return <PlatformIdentitySummary identity={kyc.identity!} verified={!!kyc.verified} bvnLast4={kyc.bvn_last4} bvnName={kyc.verified_name} />;
+  }
 
   // Switched off by an admin: nothing to do here unless already verified.
   if (kyc && !kyc.enabled && kyc.status !== "verified") return null;
@@ -178,6 +185,71 @@ export function IdentityVerificationCard() {
             {restarting && <Button type="button" variant="ghost" onClick={() => setRestarting(false)}>Cancel</Button>}
           </div>
         </form>
+      )}
+    </div>
+  );
+}
+
+const IDENTITY_STATE: Record<string, { label: string; tone: string; cta: string }> = {
+  unverified: { label: "Not verified", tone: "bg-muted text-muted-foreground", cta: "Verify my identity" },
+  pending: { label: "Face check pending", tone: "bg-amber-100 text-amber-800", cta: "Finish verification" },
+  failed: { label: "Not verified", tone: "bg-destructive/10 text-destructive", cta: "Try again" },
+  expired: { label: "Link expired", tone: "bg-amber-100 text-amber-800", cta: "Start again" },
+  revoked: { label: "Verification withdrawn", tone: "bg-destructive/10 text-destructive", cta: "Verify again" },
+};
+
+/** Settings summary of platform KYC; the steps themselves live on /account/verify. */
+function PlatformIdentitySummary({ identity, verified, bvnLast4, bvnName }: {
+  identity: IdentityStatus;
+  verified: boolean;
+  bvnLast4: string | null;
+  bvnName: string | null;
+}) {
+  const viaIdentity = identity.method === "identity";
+  const state = IDENTITY_STATE[identity.status] ?? IDENTITY_STATE.unverified;
+
+  return (
+    <div id="identity" className="scroll-mt-24 rounded-2xl border bg-card p-6 shadow-card space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ShieldCheck className="h-4 w-4" />
+          </span>
+          <div>
+            <h2 className="font-semibold">Identity verification</h2>
+            <p className="text-sm text-muted-foreground">
+              Optional. Verify with your NIN, BVN or CAC registration and a quick face check to unlock Credit Reports, KYC Verification and withdrawals.
+            </p>
+          </div>
+        </div>
+        {!verified && <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${state.tone}`}>{state.label}</span>}
+      </div>
+
+      {verified ? (
+        <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">Verified{(viaIdentity ? identity.verified_name : bvnName) ? ` as ${viaIdentity ? identity.verified_name : bvnName}` : ""}</p>
+            {viaIdentity && identity.business_name && (
+              <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium"><Building2 className="h-3.5 w-3.5" /> Verified business: {identity.business_name}</p>
+            )}
+            <p className="text-xs">
+              {viaIdentity ? `${identity.id_type?.toUpperCase()} ending ${identity.id_last4}` : bvnLast4 ? `BVN ending ${bvnLast4}` : "Identity verified"}
+              {identity.verified_at ? ` · ${formatDate(identity.verified_at)}` : ""}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {identity.status === "pending"
+              ? "Your ID checked out. Just the face check is left."
+              : identity.failure_reason ?? "It takes about 3 minutes and you only do it once."}
+          </p>
+          <Button asChild>
+            <Link href="/account/verify">{state.cta}</Link>
+          </Button>
+        </div>
       )}
     </div>
   );

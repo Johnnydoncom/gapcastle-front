@@ -120,10 +120,38 @@ export interface KycStatus {
   /** The name on the verified BVN. */
   verified_name: string | null;
   failure_reason: string | null;
+  /** Verified by either route: BVN consent above, or platform KYC below. */
+  verified?: boolean;
+  /** Platform KYC (Zeeh): NIN/BVN or CAC + liveness. */
+  identity?: IdentityStatus;
 }
 
-/** BVN verification state. Only verified users may withdraw. */
-export const useKycStatus = () => {
+export interface IdentityStatus {
+  /** Admin switch. Off: nobody can start it and no service requires it. */
+  enabled: boolean;
+  status: "unverified" | "pending" | "verified" | "failed" | "expired" | "revoked";
+  /** How the user became verified. */
+  method: "identity" | "bvn" | null;
+  account_type: "individual" | "business" | null;
+  id_type: "nin" | "bvn" | null;
+  id_last4: string | null;
+  verified_name: string | null;
+  business_name: string | null;
+  verified_at: string | null;
+  failure_reason: string | null;
+  /** Zeeh's hosted liveness page, while the attempt waits for it. */
+  liveness_url: string | null;
+  liveness_expires_at: string | null;
+  attempts_remaining: number;
+  max_attempts: number;
+}
+
+/**
+ * KYC state: BVN consent (withdrawals) and platform KYC (`identity`, for
+ * services marked kyc_required). `pollWhilePending` re-checks every few
+ * seconds while a liveness result is awaited.
+ */
+export const useKycStatus = (options: { pollWhilePending?: boolean } = {}) => {
   const { data: session } = useSession();
   const user = session?.user;
   const token = session?.accessToken;
@@ -135,7 +163,25 @@ export const useKycStatus = () => {
       const data = await fetchApi("/kyc", token as string);
       return data.data || data;
     },
+    refetchInterval: (query) =>
+      options.pollWhilePending && query.state.data?.identity?.status === "pending" ? 4000 : false,
   });
+};
+
+/**
+ * Whether a service from /services needs a verified identity this user lacks.
+ * `kyc_required` is only true while an admin has platform KYC switched on.
+ */
+export const useIdentityGate = (service: { kyc_required?: boolean } | undefined) => {
+  const { data: kyc, isSuccess } = useKycStatus();
+  const required = !!service?.kyc_required;
+
+  return {
+    /** Still finding out: show nothing rather than a flash of the gate. */
+    checking: required && !isSuccess,
+    blocked: required && isSuccess && !(kyc?.verified ?? kyc?.status === "verified"),
+    identity: kyc?.identity,
+  };
 };
 
 export const useProfile = () => {

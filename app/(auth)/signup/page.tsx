@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Logo } from "@/components/Logo";
 import { toast } from "sonner";
 import { Gift } from "lucide-react";
@@ -82,7 +83,7 @@ function SignupForm() {
           <Input type="tel" required pattern="[0-9]{11}" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="08012345678" />
         </div>
         <div className="space-y-2"><Label>Password</Label>
-          <Input type="password" required minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 6 characters" />
+          <PasswordInput required minLength={6} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 6 characters" />
         </div>
         <div className="space-y-2"><Label>Referral code <span className="font-normal text-muted-foreground">(optional)</span></Label>
           <Input value={form.referralCode} maxLength={16} className="font-mono uppercase tracking-widest" onChange={(e) => setForm({ ...form, referralCode: e.target.value.replace(/\s/g, "").toUpperCase() })} placeholder="e.g. 7KQ2MXRA" />
