@@ -377,7 +377,7 @@ export default function TransferPage() {
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div>
-        <Link href="/account/wallet" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link prefetch={false} href="/account/wallet" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Wallet
         </Link>
         <div className="flex items-end justify-between gap-4">
@@ -400,7 +400,7 @@ export default function TransferPage() {
             title="Verify your identity to transfer"
             action={(
               <Button asChild className="w-full">
-                <Link href={kyc.identity?.enabled ? "/account/verify?next=/account/wallet/transfer" : "/account/settings#identity"}>
+                <Link prefetch={false} href={kyc.identity?.enabled ? "/account/verify?next=/account/wallet/transfer" : "/account/settings#identity"}>
                   {kyc.identity?.enabled
                     ? (kyc.identity.status === "pending" ? "Finish verification" : "Verify my identity")
                     : (kyc.status === "pending" ? "Finish verification" : "Verify my BVN")}

@@ -247,7 +247,7 @@ function PlatformIdentitySummary({ identity, verified, bvnLast4, bvnName }: {
               : identity.failure_reason ?? "It takes about 3 minutes and you only do it once."}
           </p>
           <Button asChild>
-            <Link href="/account/verify">{state.cta}</Link>
+            <Link prefetch={false} href="/account/verify">{state.cta}</Link>
           </Button>
         </div>
       )}

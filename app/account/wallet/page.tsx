@@ -314,7 +314,7 @@ export default function WalletPage() {
               Available balance
               {balanceHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             </button>
-            <Link href="/account/rewards" className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/85 transition-colors hover:bg-white/15">
+            <Link prefetch={false} href="/account/rewards" className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/85 transition-colors hover:bg-white/15">
               Cashback {balanceHidden ? "₦••••" : formatNaira(wallet?.cashback_balance ?? 0)}
             </Link>
           </div>
@@ -328,11 +328,11 @@ export default function WalletPage() {
               <span className={cn(walletActionIcon, "bg-white text-slate-900 group-hover:bg-white/90 sm:bg-white sm:group-hover:bg-white/90")}><Plus className="h-5 w-5 sm:h-4 sm:w-4" /></span>
               Add Fund
             </button>
-            <Link href="/account/wallet/transfer" className={walletAction}>
+            <Link prefetch={false} href="/account/wallet/transfer" className={walletAction}>
               <span className={walletActionIcon}><Send className="h-5 w-5 sm:h-4 sm:w-4" /></span>
               Transfer
             </Link>
-            <Link href="/account/transactions" className={walletAction}>
+            <Link prefetch={false} href="/account/transactions" className={walletAction}>
               <span className={walletActionIcon}><History className="h-5 w-5 sm:h-4 sm:w-4" /></span>
               History
             </Link>
@@ -347,7 +347,7 @@ export default function WalletPage() {
       <section className="rounded-3xl border bg-card p-4 shadow-card sm:p-6">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="font-semibold">Recent activity</h2>
-          <Link href="/account/transactions" className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline">
+          <Link prefetch={false} href="/account/transactions" className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline">
             See all <ChevronRight className="h-4 w-4" />
           </Link>
         </div>

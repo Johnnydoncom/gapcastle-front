@@ -31,7 +31,7 @@ export default function Services() {
             const ui = getServiceUi(s.slug);
             const Icon = ((Icons as any)[ui.icon] ?? CircleDollarSign) as React.ElementType;
             return (
-              <Link
+              <Link prefetch={false}
                 key={s.slug}
                 href={`/account/${ui.href}`}
                 className="group rounded-2xl border bg-card p-5 shadow-card transition hover:-translate-y-1 hover:shadow-elegant"

@@ -1,7 +1,7 @@
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/session";
 import { AccountShell } from "@/components/AccountShell";
+import { AccountSessionProvider } from "@/components/AccountSessionProvider";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,15 @@ export const dynamic = "force-dynamic";
  * the client <AccountShell>.
  */
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
-  const session = await getServerSession(authOptions);
+  const session = await getCurrentSession();
 
   if (!session) {
     redirect("/login");
   }
 
-  return <AccountShell user={session.user}>{children}</AccountShell>;
+  return (
+    <AccountSessionProvider session={session}>
+      <AccountShell user={session.user}>{children}</AccountShell>
+    </AccountSessionProvider>
+  );
 }

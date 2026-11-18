@@ -167,7 +167,7 @@ export function IdentityOnboarding() {
             You&apos;ve used all {identity.max_attempts} verification attempts. Our support team can check what went wrong and give you another go.
           </p>
           {identity.failure_reason && <p className="mx-auto mt-4 max-w-sm rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">Last attempt: {identity.failure_reason}</p>}
-          <Button asChild className="mt-5"><Link href="/account/support">Contact support</Link></Button>
+          <Button asChild className="mt-5"><Link prefetch={false} href="/account/support">Contact support</Link></Button>
         </div>
       </Shell>
     );
@@ -295,7 +295,7 @@ export function IdentityOnboarding() {
                 {profileNameUsable
                   ? `It must match the name on your ${idType.toUpperCase()}.`
                   : "Add your first and last name, exactly as they appear on your ID, before you continue."}{" "}
-                <Link href="/account/settings" className="font-medium text-primary underline-offset-2 hover:underline">Edit profile</Link>
+                <Link prefetch={false} href="/account/settings" className="font-medium text-primary underline-offset-2 hover:underline">Edit profile</Link>
               </p>
             </div>
           </section>

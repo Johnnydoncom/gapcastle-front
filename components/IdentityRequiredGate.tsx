@@ -43,10 +43,10 @@ export function IdentityRequiredGate({ serviceName, identity }: { serviceName: s
 
         <div className="mt-7 flex flex-col gap-2 sm:flex-row sm:justify-center">
           <Button asChild size="lg">
-            <Link href={href}>{pending ? "Finish verification" : "Verify my identity"}</Link>
+            <Link prefetch={false} href={href}>{pending ? "Finish verification" : "Verify my identity"}</Link>
           </Button>
           <Button asChild size="lg" variant="outline">
-            <Link href="/account/services">Other services</Link>
+            <Link prefetch={false} href="/account/services">Other services</Link>
           </Button>
         </div>
       </div>

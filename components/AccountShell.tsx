@@ -88,7 +88,7 @@ export function AccountShell({ children, user }: AccountShellProps) {
     const active = isPathActive(item.to);
 
     return (
-      <Link
+      <Link prefetch={false}
         href={item.to}
         onClick={onClick}
         className={cn(
@@ -132,7 +132,7 @@ export function AccountShell({ children, user }: AccountShellProps) {
     const active = isPathActive(item.to);
 
     return (
-      <Link
+      <Link prefetch={false}
         href={item.to}
         onClick={onClick}
         className={cn(
@@ -172,7 +172,7 @@ export function AccountShell({ children, user }: AccountShellProps) {
         <div className="absolute bottom-0 right-0 w-full h-[300px] bg-gradient-to-tl from-blue-600/10 to-transparent blur-3xl opacity-50 pointer-events-none" />
 
         <div className="relative z-10 h-[70px] flex shrink-0 items-center px-6 py-1.5 border-b border-white/[0.05]">
-          <Link href="/account" className="brightness-300 contrast-150 iinvert filter">
+          <Link prefetch={false} href="/account" className="brightness-300 contrast-150 iinvert filter">
             <Logo />
           </Link>
         </div>
@@ -233,7 +233,7 @@ export function AccountShell({ children, user }: AccountShellProps) {
                   : "Invite friends and earn a bonus for each successful referral."}
               </p>
               <Button size="sm" className="w-full text-xs h-9 rounded-xl bg-white text-indigo-950 hover:bg-slate-100 hover:text-indigo-900 font-bold shadow-lg transition-all hover:scale-[1.02]" asChild>
-                <Link href="/account/rewards">Invite Friends</Link>
+                <Link prefetch={false} href="/account/rewards">Invite Friends</Link>
               </Button>
             </div>
           </div>
@@ -268,7 +268,7 @@ export function AccountShell({ children, user }: AccountShellProps) {
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200/60 bg-white/90 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl box-content md:hidden">
           <Logo />
-          <Link
+          <Link prefetch={false}
             href="/account/settings"
             aria-label="Account settings"
             className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold text-white shadow-md"
@@ -328,7 +328,7 @@ export function AccountShell({ children, user }: AccountShellProps) {
             const active = isPathActive(item.to);
 
             return (
-              <Link key={item.to} href={item.to} aria-current={active ? "page" : undefined} className={cn(tabBarItem, active ? "text-primary" : "text-slate-500")}>
+              <Link prefetch={false} key={item.to} href={item.to} aria-current={active ? "page" : undefined} className={cn(tabBarItem, active ? "text-primary" : "text-slate-500")}>
                 <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors", active && "bg-primary/10")}>
                   <Icon className="h-5 w-5" />
                 </span>

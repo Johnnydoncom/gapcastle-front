@@ -5,24 +5,21 @@ import { sessionHasExpired } from "@/lib/session-policy";
 
 const SESSION_COOKIES = ["next-auth.session-token", "__Secure-next-auth.session-token"];
 
+/**
+ * Guards /account only. Every match costs a function invocation on Vercel,
+ * so /login and /signup are left out: the proxy did nothing for them, but
+ * marketing pages prefetch both on every view.
+ */
 export async function proxy(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  const { pathname } = req.nextUrl;
 
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
-  const isProtectedRoute = pathname.startsWith("/account");
-
-  // if (isAuthRoute && token) {
-  //   return NextResponse.redirect(new URL("/account", req.url));
-  // }
-
-  if (isProtectedRoute && !token) {
+  if (!token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
   // getToken() only decodes the cookie, skipping the jwt callback that
-  // enforces the 12-hour limit, so check it here too.
-  if (isProtectedRoute && token && sessionHasExpired(token.loginAt)) {
+  // enforces the session limit, so check it here too.
+  if (sessionHasExpired(token.loginAt)) {
     const res = NextResponse.redirect(new URL("/login?reason=expired", req.url));
     SESSION_COOKIES.forEach((name) => res.cookies.delete(name));
     return res;
@@ -32,5 +29,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/account/:path*", "/login", "/signup"],
+  matcher: ["/account/:path*"],
 };

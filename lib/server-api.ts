@@ -1,6 +1,5 @@
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { getCurrentSession } from "@/lib/session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
 
@@ -9,7 +8,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1
  * Automatically handles NextAuth session passing and 401 redirects.
  */
 export async function fetchServerApi(endpoint: string, options: RequestInit = {}) {
-  const session = await getServerSession(authOptions);
+  const session = await getCurrentSession();
   
   if (!session?.accessToken) {
     redirect("/login");
