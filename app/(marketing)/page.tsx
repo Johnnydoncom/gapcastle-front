@@ -30,7 +30,7 @@ const features = [
   { icon: CreditCard, title: "Multiple Payment Options", text: "Pay with cards, bank transfer, or wallet balance — whichever fits your moment." },
   { icon: Sparkles, title: "User-Friendly Interface", text: "Designed for everyone. Pay any bill in three taps, no banking jargon." },
   { icon: Clock, title: "24/7 Availability", text: "Bills don't keep office hours. Neither do we. Pay anytime, day or night." },
-  { icon: Gift, title: "Amazing Cashback", text: "Earn up to 2% back on every transaction. Real money, instantly credited." },
+  { icon: Gift, title: "Amazing Cashback", text: "Earn cashback on transactions. Real money, instantly credited." },
   { icon: Bolt, title: "Instant Recharge", text: "Most transactions confirm in under 5 seconds. Your service is back up immediately." },
 ];
 
