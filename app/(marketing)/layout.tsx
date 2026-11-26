@@ -18,7 +18,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <div className="lg:col-span-2 space-y-4">
               <Logo />
               <p className="text-sm text-muted-foreground max-w-sm">
-                GapCastle is your bridge to financial gap — a smarter way to pay bills, manage VTU,
+                Gap Castle is your bridge to financial gap — a smarter way to pay bills, manage VTU,
                 access micro-loans and grow your business across Nigeria and beyond.
               </p>
               <div>
@@ -50,13 +50,13 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
               <h4 className="text-sm font-semibold">Get in touch</h4>
               <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2"><Mail className="h-4 w-4 mt-0.5 text-primary" /> hello@gapcastle.com</li>
-                <li className="flex items-start gap-2"><Phone className="h-4 w-4 mt-0.5 text-primary" /> +234 800 GAPCASTLE</li>
-                <li className="flex items-start gap-2"><MapPin className="h-4 w-4 mt-0.5 text-primary" /> Victoria Island, Lagos, Nigeria</li>
+                <li className="flex items-start gap-2"><Phone className="h-4 w-4 mt-0.5 text-primary" /> +234 201 887 6442</li>
+                <li className="flex items-start gap-2"><MapPin className="h-4 w-4 mt-0.5 text-primary" /> 29b Olorunnimbe Street, Wemabod Estate, Off Adeniyi Jones, Ikeja, Lagos</li>
               </ul>
             </div>
           </div>
           <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t pt-6 text-xs text-muted-foreground sm:flex-row">
-            <p>© {new Date().getFullYear()} GapCastle Technologies Ltd. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} Gap Castle Technologies Ltd. All rights reserved.</p>
             <div className="flex gap-5">
               <a href="#" className="hover:text-foreground">Privacy</a>
               <a href="#" className="hover:text-foreground">Terms</a>
