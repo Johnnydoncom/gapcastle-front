@@ -8,11 +8,12 @@ export const useTickets = (status?: string) => {
   const token = session?.accessToken;
 
   return useQuery({
-    queryKey: ["tickets", status],
+    queryKey: ["tickets", status ?? "", session?.user?.id],
     enabled: !!token,
     queryFn: async () => {
-      const query = status && status !== "all" ? `?status=${status}` : "";
-      const data = await fetchApi(`/tickets${query}`, token as string);
+      const params = new URLSearchParams({ per_page: "50" });
+      if (status && status !== "all") params.set("status", status);
+      const data = await fetchApi(`/tickets?${params}`, token as string);
       let tickets = data.data || data;
       if (tickets && !Array.isArray(tickets) && Array.isArray(tickets.data)) {
         tickets = tickets.data;
@@ -27,8 +28,10 @@ export const useTicket = (id: string | number) => {
   const token = session?.accessToken;
 
   return useQuery({
-    queryKey: ["ticket", id],
+    queryKey: ["ticket", String(id), session?.user?.id],
     enabled: !!token && !!id,
+    // A missing or someone else's ticket will not appear on retry.
+    retry: 1,
     queryFn: async () => {
       const data = await fetchApi(`/tickets/${id}`, token as string);
       return (data.data || data) as Ticket;
@@ -43,21 +46,9 @@ export const useCreateTicket = () => {
 
   return useMutation({
     mutationFn: async (formData: FormData) => {
-      if (!token) throw new Error("No token");
-      // Need to use native fetch for FormData since fetchApi sets Content-Type: application/json
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
-      const res = await fetch(`${API_URL}/tickets`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Accept": "application/json",
-          // Don't set Content-Type, browser will set it with boundary for FormData
-        },
-        body: formData,
-      });
-      
-      if (!res.ok) throw new Error(`API Error: ${res.status}`);
-      return res.json();
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      const data = await fetchApi("/tickets", token, { method: "POST", body: formData });
+      return data.data as Ticket;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
@@ -72,22 +63,11 @@ export const useReplyToTicket = () => {
 
   return useMutation({
     mutationFn: async ({ id, formData }: { id: number | string; formData: FormData }) => {
-      if (!token) throw new Error("No token");
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1";
-      const res = await fetch(`${API_URL}/tickets/${id}/reply`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Accept": "application/json",
-        },
-        body: formData,
-      });
-      
-      if (!res.ok) throw new Error(`API Error: ${res.status}`);
-      return res.json();
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      return fetchApi(`/tickets/${id}/reply`, token, { method: "POST", body: formData });
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["ticket", variables.id.toString()] });
+      queryClient.invalidateQueries({ queryKey: ["ticket", String(variables.id)] });
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
     },
   });
@@ -100,11 +80,12 @@ export const useCloseTicket = () => {
 
   return useMutation({
     mutationFn: async (id: number | string) => {
-      const data = await fetchApi(`/tickets/${id}/close`, token as string, { method: "POST" });
-      return data.data || data;
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      const data = await fetchApi(`/tickets/${id}/close`, token, { method: "POST" });
+      return (data.data || data) as Ticket;
     },
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ["ticket", id.toString()] });
+      queryClient.invalidateQueries({ queryKey: ["ticket", String(id)] });
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
     },
   });

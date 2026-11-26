@@ -6,12 +6,14 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://gapcastle.test/api/v1
 
 export const fetchApi = async (endpoint: string, token: string | null, options: RequestInit = {}) => {
   if (!token) throw new Error("No token provided");
+  // A FormData body (file uploads) needs the browser to set its own multipart boundary.
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const res = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {
       "Authorization": `Bearer ${token}`,
       "Accept": "application/json",
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...options.headers,
     }
   });
