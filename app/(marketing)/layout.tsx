@@ -65,11 +65,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
                 <p className="flex items-start gap-2"><Phone aria-hidden className="h-4 w-4 mt-0.5 shrink-0 text-primary" /><a href={`tel:${SITE.phone.e164}`} className="hover:text-foreground">{SITE.phone.display}</a></p>
                 <p className="flex items-start gap-2"><MessageCircle aria-hidden className="h-4 w-4 mt-0.5 shrink-0 text-primary" /><a href={SITE.whatsappUrl} target="_blank" rel="noopener noreferrer" className="hover:text-foreground">Chat on WhatsApp</a></p>
                 <p className="flex items-start gap-2"><MapPin aria-hidden className="h-4 w-4 mt-0.5 shrink-0 text-primary" /><a href={SITE.mapUrl} target="_blank" rel="noopener noreferrer" className="hover:text-foreground">{SITE.address.full}</a></p>
-                <p className="flex items-start gap-2"><Clock aria-hidden className="h-4 w-4 mt-0.5 shrink-0 text-primary" /><span>{SITE.hours.weekdays}<br />{SITE.hours.weekend}</span></p>
               </address>
-              <a href={SITE.social.facebook} target="_blank" rel="noopener noreferrer" aria-label={`${SITE.name} on Facebook`} className="mt-4 inline-flex h-9 w-9 items-center justify-center rounded-full border bg-card text-muted-foreground transition-colors hover:text-foreground">
-                <FacebookIcon className="h-4 w-4" />
-              </a>
             </div>
           </div>
           <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t pt-6 text-xs text-muted-foreground sm:flex-row">
