@@ -1,13 +1,20 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHero, SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
+import { JsonLd } from "@/components/JsonLd";
+import { pageMetadata } from "@/lib/seo";
+import { breadcrumbSchema, webPageSchema } from "@/lib/structured-data";
 import {
   Banknote, Clock, ShieldCheck, TrendingUp, Briefcase, GraduationCap, Home, Heart, Smartphone,
   Check, ArrowRight, Sparkles, FileCheck, Wallet, Users,
 } from "lucide-react";
 import { LoanCalculator } from "@/components/LoanCalculator";
+
+const LOANS_TITLE = "Quick Loans in Nigeria — No Collateral, Fast Approval";
+const LOANS_DESCRIPTION = "Get quick loans in Nigeria from Gap Castle, a registered money lender. Borrow from ₦100 to ₦5M with no collateral, transparent fees and approval in minutes.";
+
+export const metadata: Metadata = pageMetadata({ title: LOANS_TITLE, description: LOANS_DESCRIPTION, path: "/loans" });
 
 const products = [
   { icon: Smartphone, title: "Airtime Advance", range: "₦100 – ₦5,000", tenor: "7 days", text: "Run out of airtime at midnight? Borrow instantly and repay on your next top-up." },
@@ -43,6 +50,7 @@ const eligibility = [
 export default function Loans() {
   return (
     <>
+      <JsonLd data={[webPageSchema({ name: LOANS_TITLE, description: LOANS_DESCRIPTION, path: "/loans" }), breadcrumbSchema([{ name: "Loans", path: "/loans" }])]} />
       <PageHero
         eyebrow="GapCastle Loans"
         title={<>Quick, fair credit when <span className="gradient-text">you need it most</span></>}
@@ -134,7 +142,7 @@ export default function Loans() {
             <FileCheck className="h-10 w-10 text-primary" />
             <h3 className="mt-4 text-xl font-bold">Responsible lending pledge</h3>
             <p className="mt-3 text-muted-foreground">
-              We're proud members of the Money Lenders Association of Nigeria. We never charge predatory rates,
+              We&apos;re proud members of the Money Lenders Association of Nigeria. We never charge predatory rates,
               never share your data with shamers, and always offer hardship plans if life happens.
             </p>
             <div className="mt-6 grid grid-cols-2 gap-3 text-sm">

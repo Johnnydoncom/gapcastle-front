@@ -1,8 +1,17 @@
-"use client";
+import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd } from "@/components/JsonLd";
+import { SITE } from "@/lib/site";
+import { pageMetadata } from "@/lib/seo";
+import { breadcrumbSchema, webPageSchema } from "@/lib/structured-data";
 import { PageHero, SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
 import { Target, Eye, Heart, Users, Globe2, Award, TrendingUp, ArrowRight, ShieldCheck, Sparkles, Handshake } from "lucide-react";
+
+const ABOUT_TITLE = "About Us — Nigerian Bill Payment & Quick Loan Company";
+const ABOUT_DESCRIPTION = `${SITE.legalName} is a Nigerian fintech and registered money lender in Ikeja, Lagos, making bill payments, airtime, data and quick loans simple since ${SITE.foundingYear}.`;
+
+export const metadata: Metadata = pageMetadata({ title: ABOUT_TITLE, description: ABOUT_DESCRIPTION, path: "/about" });
 
 const values = [
   { icon: ShieldCheck, title: "Trust", text: "We treat every naira like our own — protected by bank-grade security and transparent pricing." },
@@ -12,7 +21,7 @@ const values = [
 ];
 
 const milestones = [
-  { year: "2021", title: "Founded in Lagos", text: "GapCastle began as a simple VTU platform serving university students." },
+  { year: "2020", title: "Founded in Lagos", text: "Gap Castle was incorporated in Nigeria and began as a simple VTU platform serving university students." },
   { year: "2022", title: "10,000 users", text: "Crossed our first major milestone with users across 30 Nigerian states." },
   { year: "2023", title: "Multi-service launch", text: "Expanded to electricity, cable TV, internet, and exam payments." },
   { year: "2024", title: "₦500M+ processed", text: "Half a billion naira in bills processed — and counting." },
@@ -30,6 +39,7 @@ const team = [
 export default function About() {
   return (
     <>
+      <JsonLd data={[webPageSchema({ type: "AboutPage", name: ABOUT_TITLE, description: ABOUT_DESCRIPTION, path: "/about" }), breadcrumbSchema([{ name: "About", path: "/about" }])]} />
       <PageHero
         eyebrow="About GapCastle"
         title={<>Bridging the gap between <span className="gradient-text">people and finance</span></>}
@@ -65,8 +75,8 @@ export default function About() {
             <SectionHeader align="left" eyebrow="Our story" title="From a dorm-room idea to a national platform" />
             <div className="mt-6 space-y-4 text-muted-foreground">
               <p>
-                GapCastle was born in 2021 from a simple frustration: paying for airtime, electricity and exam fees in Nigeria
-                shouldn't require five different apps, three failed transactions and a trip to a kiosk.
+                GapCastle was born in 2020 from a simple frustration: paying for airtime, electricity and exam fees in Nigeria
+                shouldn&apos;t require five different apps, three failed transactions and a trip to a kiosk.
               </p>
               <p>
                 Our co-founders, Adaeze and Ibrahim, were university students juggling tuition fees and side hustles when they
@@ -74,7 +84,7 @@ export default function About() {
                 students, market traders, and small business owners — bridging the gap between people and the financial services they deserve.
               </p>
               <p>
-                We're independently funded, profitably growing, and proudly Nigerian. Every feature we ship is built with one
+                We&apos;re independently funded, profitably growing, and proudly Nigerian. Every feature we ship is built with one
                 question in mind: <em className="text-foreground">does this make life easier for our users?</em>
               </p>
             </div>
@@ -93,6 +103,22 @@ export default function About() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Company information — the entity facts search and answer engines quote */}
+      <section className="container pt-20">
+        <div className="mx-auto max-w-4xl rounded-3xl border bg-card p-8 shadow-card">
+          <h2 className="text-2xl font-bold">Company information</h2>
+          <dl className="mt-6 grid gap-5 text-sm sm:grid-cols-2">
+            <div><dt className="text-muted-foreground">Registered name</dt><dd className="mt-1 font-semibold">{SITE.legalName}</dd></div>
+            <div><dt className="text-muted-foreground">Incorporated</dt><dd className="mt-1 font-semibold">Nigeria, {SITE.foundingYear}</dd></div>
+            <div className="sm:col-span-2"><dt className="text-muted-foreground">Registration</dt><dd className="mt-1 font-semibold">Duly incorporated under the laws of the Federal Republic of Nigeria and registered to carry on money lending, bill payments and other financial services.</dd></div>
+            <div><dt className="text-muted-foreground">Head office</dt><dd className="mt-1 font-semibold"><address className="not-italic">{SITE.address.full}</address></dd></div>
+            <div><dt className="text-muted-foreground">Business hours</dt><dd className="mt-1 font-semibold">{SITE.hours.weekdays}<br />{SITE.hours.weekend}</dd></div>
+            <div><dt className="text-muted-foreground">Phone</dt><dd className="mt-1 font-semibold"><a href={`tel:${SITE.phone.e164}`} className="text-primary hover:underline">{SITE.phone.display}</a></dd></div>
+            <div><dt className="text-muted-foreground">Email</dt><dd className="mt-1 font-semibold"><a href={`mailto:${SITE.email}`} className="text-primary hover:underline">{SITE.email}</a></dd></div>
+          </dl>
         </div>
       </section>
 
@@ -115,7 +141,7 @@ export default function About() {
       {/* Timeline */}
       <section className="border-y bg-secondary/30 py-20">
         <div className="container">
-          <SectionHeader eyebrow="Our journey" title="Five years of bridging gaps" />
+          <SectionHeader eyebrow="Our journey" title={`Bridging gaps since ${SITE.foundingYear}`} />
           <div className="relative mx-auto mt-12 max-w-4xl">
             <div className="absolute left-4 top-0 h-full w-px bg-border md:left-1/2" />
             {milestones.map((m, i) => (

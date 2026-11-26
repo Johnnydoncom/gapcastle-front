@@ -1,18 +1,25 @@
-"use client";
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
-  Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious,
-} from "@/components/ui/carousel";
-import {
   Smartphone, Wifi, Tv, Zap, Globe, GraduationCap, Shield,
-  ArrowRight, Gift, Lock, Zap as Bolt, Check, ShieldCheck, CreditCard,
-  Clock, Sparkles, BadgeCheck, Banknote, Receipt, Headphones, Star, TrendingUp,
+  ArrowRight, Gift, Zap as Bolt, Check, ShieldCheck, CreditCard,
+  Clock, Sparkles, Receipt, Star,
   ArrowUpRight,
 } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import aboutTeaserImg from "@/assets/about-teaser.jpg";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { JsonLd } from "@/components/JsonLd";
+import { FaqList } from "@/components/marketing/FaqList";
+import { TestimonialsCarousel } from "@/components/marketing/TestimonialsCarousel";
+import { SITE } from "@/lib/site";
+import { faqSchema, webPageSchema } from "@/lib/structured-data";
+
+/** Title and description come from the root layout defaults (SITE.title / SITE.description). */
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 const services = [
   { icon: Smartphone, label: "Airtime", desc: "All networks", tone: "from-blue-500/10 to-blue-500/0 text-blue-600" },
@@ -57,11 +64,13 @@ const faqs = [
   { q: "Are my payment details secure?", a: "Yes. We use industry-standard encryption and never store your card details on our servers. Every transaction is processed through a PCI-compliant gateway." },
   { q: "How long does a payment take?", a: "Most payments are instant. Bank-transfer top-ups can take a few minutes, and a small number of biller settlements may take up to a few hours." },
   { q: "Can I schedule recurring payments?", a: "Yes — set up auto-pay for any bill. You choose the frequency and start date, and you can pause or cancel anytime." },
+  { q: "How do I contact Gap Castle support?", a: `Email ${SITE.email}, call ${SITE.phone.display} or chat with us on WhatsApp. We are open ${SITE.hours.weekdays}, and our office is at ${SITE.address.full}.` },
 ];
 
 export default function Landing() {
   return (
     <>
+      <JsonLd data={[webPageSchema({ name: SITE.title, description: SITE.description, path: "/" }), faqSchema(faqs)]} />
       {/* Hero — premium fintech, phone mockup, ambient glow */}
       <section className="relative overflow-hidden">
         {/* layered backdrop blending with header */}
@@ -295,19 +304,18 @@ export default function Landing() {
       <section className="border-y bg-secondary/30 py-20">
         <div className="container grid gap-12 lg:grid-cols-2 lg:items-center">
           <div className="relative rounded-3xl overflow-hidden border shadow-card">
-            <img
-              src={aboutTeaserImg.src}
-              alt="GapCastle user enjoying seamless payments"
+            <Image
+              src={aboutTeaserImg}
+              alt="Gap Castle customer paying a bill on her phone"
               className="w-full h-full object-cover"
-              loading="lazy"
-              width={1024}
-              height={1024}
+              sizes="(min-width: 1024px) 50vw, 100vw"
+              placeholder="blur"
             />
           </div>
           <div>
             <SectionHeader align="left" eyebrow="About us" title={<>Empowering convenient utility bill payments, loans, VTU solutions and more</>} />
             <p className="mt-4 text-muted-foreground">
-              At GapCastle, we've revolutionized the way you pay utility bills, handle loan needs, settle airtime
+              At GapCastle, we&apos;ve revolutionized the way you pay utility bills, handle loan needs, settle airtime
               and data bundle needs, manage expenses, and access business advisory.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
@@ -353,36 +361,7 @@ export default function Landing() {
       {/* Testimonials */}
       <section className="container py-20">
         <SectionHeader eyebrow="Testimonials" title="What our clients say" subtitle="Trusted by individuals and businesses across Nigeria, Ghana and the UK." />
-        <Carousel
-          opts={{ align: "start", loop: true }}
-          className="mt-12 w-full"
-        >
-          <CarouselContent className="-ml-4">
-            {testimonials.map((t) => (
-              <CarouselItem key={t.name} className="pl-4 basis-full md:basis-1/2 lg:basis-1/3">
-                <figure className="flex h-full flex-col rounded-2xl border bg-card p-6 shadow-card hover-lift">
-                  <div className="flex gap-0.5">{Array.from({ length: 5 }).map((_, j) => <Star key={j} className="h-4 w-4 fill-warning text-warning" />)}</div>
-                  <blockquote className="mt-3 flex-1 text-sm text-muted-foreground">"{t.quote}"</blockquote>
-                  <figcaption className="mt-4 flex items-center gap-3 border-t pt-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full gradient-primary text-sm font-bold text-primary-foreground">
-                      {t.name.split(" ").map(n => n[0]).join("")}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">{t.name}</p>
-                      <p className="text-xs text-muted-foreground">{t.city}</p>
-                    </div>
-                  </figcaption>
-                </figure>
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          <div className="flex justify-center gap-2 mt-6 md:hidden">
-            <CarouselPrevious className="static translate-y-0" />
-            <CarouselNext className="static translate-y-0" />
-          </div>
-          <CarouselPrevious className="hidden md:flex -left-4 lg:-left-12" />
-          <CarouselNext className="hidden md:flex -right-4 lg:-right-12" />
-        </Carousel>
+        <TestimonialsCarousel testimonials={testimonials} />
       </section>
 
       {/* FAQ */}
@@ -390,14 +369,7 @@ export default function Landing() {
         <div className="container">
           <SectionHeader eyebrow="FAQ" title="Frequently asked questions" subtitle="Quick answers to the questions we hear most often." />
           <div className="mx-auto mt-10 max-w-3xl">
-            <Accordion type="single" collapsible className="space-y-3">
-              {faqs.map((f, i) => (
-                <AccordionItem key={i} value={`q-${i}`} className="overflow-hidden rounded-2xl border bg-card px-5 shadow-card">
-                  <AccordionTrigger className="text-left text-base font-semibold hover:no-underline">{f.q}</AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground">{f.a}</AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+            <FaqList faqs={faqs} />
           </div>
         </div>
       </section>

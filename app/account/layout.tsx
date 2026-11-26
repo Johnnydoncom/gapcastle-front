@@ -1,9 +1,16 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/session";
 import { AccountShell } from "@/components/AccountShell";
 import { AccountSessionProvider } from "@/components/AccountSessionProvider";
 
 export const dynamic = "force-dynamic";
+
+/** Signed-in pages are private: never indexed, whatever robots.txt allows. */
+export const metadata: Metadata = {
+  title: { default: "My Account", template: "%s | Gap Castle" },
+  robots: { index: false, follow: false },
+};
 
 /**
  * Server component: guards the whole /account area with a server-side session

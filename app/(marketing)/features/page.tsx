@@ -1,11 +1,19 @@
-"use client";
+import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd } from "@/components/JsonLd";
+import { pageMetadata } from "@/lib/seo";
+import { breadcrumbSchema, webPageSchema } from "@/lib/structured-data";
 import { PageHero, SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
 import {
   ShieldCheck, Zap, Gift, Receipt, Wallet, Users, Bell, Lock, BarChart3, Repeat,
   Smartphone, CreditCard, Globe, Headphones, ArrowRight, Check, Sparkles, Clock, FileText,
 } from "lucide-react";
+
+const FEATURES_TITLE = "Features — Smart Wallet, Cashback & Instant Bill Payments";
+const FEATURES_DESCRIPTION = "Explore Gap Castle features: a smart wallet, cashback on payments, instant airtime, data, electricity and cable TV payments, saved beneficiaries, digital receipts and bank-grade security.";
+
+export const metadata: Metadata = pageMetadata({ title: FEATURES_TITLE, description: FEATURES_DESCRIPTION, path: "/features" });
 
 const big = [
   { icon: Wallet, title: "Smart Wallet", text: "Fund once, pay anything. Top up via card, transfer or USSD and use your balance across all services with one tap.", color: "from-blue-500/20 to-purple-500/10" },
@@ -24,7 +32,7 @@ const grid = [
   { icon: Smartphone, title: "Network auto-detect", text: "Type a phone number — we detect MTN, Airtel, Glo or 9mobile automatically." },
   { icon: CreditCard, title: "Multiple payment methods", text: "Cards, bank transfer, USSD, wallet — pay however you like." },
   { icon: Globe, title: "Cross-border ready", text: "Built for Nigeria, Ghana and beyond. Multi-currency on the roadmap." },
-  { icon: Headphones, title: "24/7 human support", text: "Real Nigerians answering chat, email and phone — no bots, no scripts." },
+  { icon: Headphones, title: "Human support", text: "Real people answering WhatsApp, email and phone, Monday to Friday, 9AM–4PM — no bots, no scripts." },
   { icon: Clock, title: "Transaction history", text: "Searchable, filterable, exportable history going back to day one." },
   { icon: FileText, title: "Bulk uploads", text: "Pay 100 staff airtime in one CSV. Built for SMEs and HR teams." },
 ];
@@ -35,7 +43,7 @@ const compare = [
   { feature: "Save beneficiaries", us: true, banks: true, ussd: false },
   { feature: "Auto-pay scheduling", us: true, banks: false, ussd: false },
   { feature: "Spending analytics", us: true, banks: false, ussd: false },
-  { feature: "24/7 chat support", us: true, banks: false, ussd: false },
+  { feature: "WhatsApp support", us: true, banks: false, ussd: false },
   { feature: "Free to use", us: true, banks: false, ussd: true },
   { feature: "Works without internet", us: false, banks: false, ussd: true },
 ];
@@ -43,6 +51,7 @@ const compare = [
 export default function Features() {
   return (
     <>
+      <JsonLd data={[webPageSchema({ name: FEATURES_TITLE, description: FEATURES_DESCRIPTION, path: "/features" }), breadcrumbSchema([{ name: "Features", path: "/features" }])]} />
       <PageHero
         eyebrow="Features"
         title={<>Everything you need to <span className="gradient-text">pay smarter</span></>}
