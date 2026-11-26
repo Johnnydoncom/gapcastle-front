@@ -46,7 +46,7 @@ export default function Contact() {
 
       {/* Channels */}
       <section className="container py-20">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {channels.map(({ icon: Icon, title, text, action, meta }, i) => (
             <div key={title} style={{ animationDelay: `${i * 80}ms` }} className="group rounded-2xl border bg-card p-6 shadow-card hover-lift animate-fade-in-up">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-primary transition-transform group-hover:rotate-6 group-hover:scale-110">
