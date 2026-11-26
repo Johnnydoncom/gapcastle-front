@@ -10,7 +10,6 @@ import { toast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const channels = [
-  { icon: MessageCircle, title: "Live chat", text: "Fastest way to reach us. Average response: 2 minutes.", action: "Chat now", meta: "24/7" },
   { icon: Mail, title: "Email", text: "For detailed questions and account-specific support.", action: "hello@gapcastle.com", meta: "Reply in 4 hrs" },
   { icon: Phone, title: "Phone", text: "Speak to a real person about complex issues or business enquiries.", action: "+234 201 887 6442", meta: "Mon–Sat, 8AM–8PM" },
   { icon: Building2, title: "Visit us", text: "Drop by our Lagos HQ for partnership and enterprise conversations.", action: "29b Olorunnimbe Street, Wemabod Estate, Off Adeniyi Jones, Ikeja, Lagos", meta: "By appointment" },
