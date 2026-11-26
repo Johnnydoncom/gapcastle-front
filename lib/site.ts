@@ -17,7 +17,7 @@ export const SITE = {
   description:
     "Pay airtime, data, cable TV, electricity, internet, education and insurance bills in Nigeria in seconds, earn cashback on every payment, and access quick loans with Gap Castle, a registered money lender in Ikeja, Lagos.",
   foundingYear: "2020",
-  email: "info@gapcastle.com",
+  email: "support@gapcastle.com",
   phone: {
     display: "+234 201 887 6442",
     e164: "+2342018876442",
