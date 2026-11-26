@@ -113,7 +113,7 @@ export default function Landing() {
             </div>
 
             {/* Stat strip */}
-            <div className="grid grid-cols-3 divide-x divide-border rounded-2xl border border-border/70 bg-card/70 p-4 backdrop-blur">
+            {/* <div className="grid grid-cols-3 divide-x divide-border rounded-2xl border border-border/70 bg-card/70 p-4 backdrop-blur">
               {[
                 { v: "10k+", l: "Happy users" },
                 { v: "₦500M+", l: "Bills processed" },
@@ -124,7 +124,7 @@ export default function Landing() {
                   <p className="text-xs text-muted-foreground">{s.l}</p>
                 </div>
               ))}
-            </div>
+            </div> */}
           </div>
 
           {/* RIGHT — phone mockup with floating cards */}
